@@ -57,7 +57,7 @@ const Login = () => {
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-400 to-yellow-700 p-0.5 shadow-lg shadow-amber-500/20">
             <img src="/logo.png" className="w-full h-full rounded-full object-cover" alt="Logo" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">Gestão Andrade</span>
+          <span className="text-xl font-bold tracking-tight text-white">Alto Capital Prime</span>
         </div>
 
         {/* Conteúdo Central/Inferior */}
@@ -94,7 +94,9 @@ const Login = () => {
                 </div>
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-white">Acesse sua conta</h1>
+            <p className="text-yellow-600">Onde o dinheiro encontra estratégia.</p>
             <p className="text-zinc-400">Entre com suas credenciais para continuar.</p>
+
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
