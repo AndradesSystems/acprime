@@ -16,7 +16,12 @@ export type DashboardSummary = {
   totalEmprestado: number;
   subTotalEmprestado: { diario: number; semanal: number; mensal: number };
   jurosETaxasAReceber: number;
-  subJurosAReceber: { juros: number; taxas: number };
+  // 🎯 Atualizado para a nova estrutura discriminada do Back-end
+  subJurosAReceber: { 
+    jurosMensais: number; 
+    jurosParcelados: number; 
+    taxas: number; 
+  };
   totalMontanteAReceber: number;
   subMontanteAReceber: { parcelas: number; mensal: number };
   totalRecebido: number;
@@ -32,8 +37,9 @@ export const getDashboardSummary = async (params: {
   startDate: string;
   endDate: string;
 }): Promise<DashboardSummary> => {
-  const { data } = await api.get<DashboardSummary>("/dashboard/summary", {
+  const { data } = await api.get<any>("/dashboard/summary", {
     params,
-  });
+  })
+
   return data;
 };

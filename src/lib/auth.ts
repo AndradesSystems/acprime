@@ -1,5 +1,6 @@
 // src/lib/auth.ts
 import { api } from "@/services/api";
+import { createSubscriber, SubscriberInput } from "@/services/subscriber";
 
 type User = {
   id: string;
@@ -16,6 +17,12 @@ export const authService = {
     localStorage.setItem("user", JSON.stringify(data.user));
 
     return data.user;
+  },
+
+  // Nova função de Registro conectada à rota/service de subscription
+  async register(input: SubscriberInput): Promise<void> {
+    // Aqui fazemos a chamada direta que você já usa na tela de gerenciamento
+    await createSubscriber(input);
   },
 
   logout() {

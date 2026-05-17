@@ -21,16 +21,22 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+// O estado local agora permite string para dar liberdade total ao input nativo
+type FormRates = {
+  DAILY: string | number;
+  WEEKLY: string | number;
+  MONTHLY: string | number;
+};
+
 export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   const queryClient = useQueryClient();
   
-  const [rates, setRates] = useState({
+  const [rates, setRates] = useState<FormRates>({
     DAILY: 0,
     WEEKLY: 0,
     MONTHLY: 0,
   });
 
-  // 🔒 Adicionamos o generic <Taxa[]> para o useQuery saber que serverTaxas é um array de Taxas
   const { data: serverTaxas, isLoading: isLoadingTaxas } = useQuery<Taxa[]>({
     queryKey: ["taxas-globais"],
     queryFn: getTaxas,
@@ -39,11 +45,10 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
 
   useEffect(() => {
     if (serverTaxas && Array.isArray(serverTaxas)) {
-      const mapped = { DAILY: 0, WEEKLY: 0, MONTHLY: 0 };
+      const mapped: FormRates = { DAILY: 0, WEEKLY: 0, MONTHLY: 0 };
       serverTaxas.forEach((t) => {
-        // Garantimos que a chave existe no nosso objeto de estado
         if (t.type in mapped) {
-          mapped[t.type as keyof typeof mapped] = Number(t.value);
+          mapped[t.type as keyof FormRates] = Number(t.value);
         }
       });
       setRates(mapped);
@@ -51,11 +56,12 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
   }, [serverTaxas]);
 
   const mutation = useMutation({
-    mutationFn: async (newRates: typeof rates) => {
+    mutationFn: async (newRates: FormRates) => {
       const promises = Object.entries(newRates).map(([type, value]) =>
         updateTaxa({ 
           type: type as ContractPeriodicity, 
-          value: Number(value) 
+          // 💡 Se o campo estiver vazio (""), envia como 0 para o backend
+          value: value === "" ? 0 : Number(value) 
         })
       );
       return Promise.all(promises);
@@ -90,36 +96,42 @@ export default function SettingsModal({ open, onClose }: SettingsModalProps) {
         ) : (
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="daily">Taxa Diária (%)</Label>
+              {/* 💡 Removido o (%) */}
+              <Label htmlFor="daily">Taxa Diária</Label> 
               <Input
                 id="daily"
                 type="number"
                 step="0.01"
                 className="bg-white/5 border-white/10"
                 value={rates.DAILY}
-                onChange={(e) => setRates({ ...rates, DAILY: Number(e.target.value) })}
+                // 💡 Passa o e.target.value direto (string), permitindo apagar o zero sem travar
+                onChange={(e) => setRates({ ...rates, DAILY: e.target.value })}
               />
             </div>
+            
             <div className="grid gap-2">
-              <Label htmlFor="weekly">Taxa Semanal (%)</Label>
+              {/* 💡 Removido o (%) */}
+              <Label htmlFor="weekly">Taxa Semanal</Label>
               <Input
                 id="weekly"
                 type="number"
                 step="0.01"
                 className="bg-white/5 border-white/10"
                 value={rates.WEEKLY}
-                onChange={(e) => setRates({ ...rates, WEEKLY: Number(e.target.value) })}
+                onChange={(e) => setRates({ ...rates, WEEKLY: e.target.value })}
               />
             </div>
+            
             <div className="grid gap-2">
-              <Label htmlFor="monthly">Taxa Mensal (%)</Label>
+              {/* 💡 Removido o (%) */}
+              <Label htmlFor="monthly">Taxa Mensal</Label>
               <Input
                 id="monthly"
                 type="number"
                 step="0.01"
                 className="bg-white/5 border-white/10"
                 value={rates.MONTHLY}
-                onChange={(e) => setRates({ ...rates, MONTHLY: Number(e.target.value) })}
+                onChange={(e) => setRates({ ...rates, MONTHLY: e.target.value })}
               />
             </div>
           </div>

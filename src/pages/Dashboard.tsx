@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isBefore, startOfDay, isToday } from "date-fns";
 
@@ -14,16 +14,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Users,
   DollarSignIcon,
   Calendar,
   Clock,
   Loader2,
   ArrowUpRight,
-  Wallet,      // Novo ícone
-  Eye,         // Novo ícone
-  EyeOff,      // Novo ícone
-  TrendingUp,  // Novo ícone
+  Wallet,
+  Eye,
+  EyeOff,
+  TrendingUp,
 } from "lucide-react";
 
 import DateRangePicker from "@/components/DateRangePicker";
@@ -31,8 +30,7 @@ import {
   getDashboardSummary,
   type DashboardRecentContract,
 } from "@/services/dashboard";
-// 👇 Importando o serviço de balance que criamos anteriormente
-import { getBalance } from "@/services/balance"; 
+import { getBalance } from "@/services/balance";
 
 import FinanceSummaryCard from "@/components/FinanceSummaryCard";
 import NewContractSheet from "@/components/NewContractSheet";
@@ -54,11 +52,9 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const { range, setRange } = useDateRange();
   const [isExpenseSheetOpen, setIsExpenseSheetOpen] = useState(false);
-  
-  // 👇 Estado para controlar a privacidade do saldo
   const [showBalance, setShowBalance] = useState(true);
 
-  // 1. Query do Resumo Geral
+  // 1. Query do Resumo Geral (Consumindo a API Local com o novo payload)
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-summary", range.from, range.to],
     queryFn: () =>
@@ -69,12 +65,11 @@ const Dashboard = () => {
     enabled: !!(range.from && range.to),
   });
 
-  // 2. 👇 Query do Saldo Atual (Balance)
+  // 2. Query do Saldo Atual (Balance)
   const { data: balanceData, isLoading: isLoadingBalance } = useQuery({
     queryKey: ["balance"],
     queryFn: getBalance,
-    // Refetch a cada janela focada para garantir saldo atualizado
-    refetchOnWindowFocus: true, 
+    refetchOnWindowFocus: true,
   });
 
   const saveExpenseMutation = useMutation({
@@ -82,17 +77,19 @@ const Dashboard = () => {
     onSuccess: () => {
       toast({ title: "Gasto registrado!" });
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
-      // Invalida o saldo também, pois pode ter sido uma retirada
       queryClient.invalidateQueries({ queryKey: ["balance"] });
       setIsExpenseSheetOpen(false);
     },
   });
 
-  const formatCurrency = (v: number) =>
-    new Intl.NumberFormat("pt-BR", {
+  // Formatação local para segurança de arredondamento em tela
+  const formatCurrency = (v: number) => {
+    const valueToFormat = Math.round((v + Number.EPSILON) * 100) / 100;
+    return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
-    }).format(v);
+    }).format(valueToFormat);
+  };
 
   const getBadge = (type: string) => {
     const config: any = {
@@ -127,7 +124,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen p-6 text-white">
       <div className="max-w-7xl mx-auto space-y-8">
-        
+
         {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -167,7 +164,7 @@ const Dashboard = () => {
 
         {/* MAIN CONTENT GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+
           {/* LEFT COLUMN: TABLE */}
           <Card className="lg:col-span-2 p-6 bg-card/40 border-white/5 shadow-2xl backdrop-blur-md overflow-hidden">
             <div className="flex items-center gap-3 mb-8">
@@ -251,13 +248,12 @@ const Dashboard = () => {
                           </TableCell>
                           <TableCell>
                             <div
-                              className={`flex items-center gap-2 text-xs font-bold ${
-                                isOverdue
+                              className={`flex items-center gap-2 text-xs font-bold ${isOverdue
                                   ? "text-red-400"
                                   : isVencendoHoje
-                                  ? "text-blue-400"
-                                  : "text-muted-foreground"
-                              }`}
+                                    ? "text-blue-400"
+                                    : "text-muted-foreground"
+                                }`}
                             >
                               <Calendar className="w-3.5 h-3.5" />
                               {venc.toLocaleDateString("pt-BR")}
@@ -265,19 +261,18 @@ const Dashboard = () => {
                           </TableCell>
                           <TableCell className="text-right pr-6">
                             <span
-                              className={`text-[9px] px-2.5 py-1 rounded-md font-black uppercase tracking-widest border ${
-                                isOverdue
+                              className={`text-[9px] px-2.5 py-1 rounded-md font-black uppercase tracking-widest border ${isOverdue
                                   ? "bg-red-600 border-red-400 text-white animate-pulse"
                                   : isVencendoHoje
-                                  ? "bg-blue-600 border-blue-400 text-white"
-                                  : "bg-white/5 border-white/10 text-gray-500"
-                              }`}
+                                    ? "bg-blue-600 border-blue-400 text-white"
+                                    : "bg-white/5 border-white/10 text-gray-500"
+                                }`}
                             >
                               {isOverdue
                                 ? "Atrasado"
                                 : isVencendoHoje
-                                ? "Vence Hoje"
-                                : contract.status}
+                                  ? "Vence Hoje"
+                                  : contract.status}
                             </span>
                           </TableCell>
                         </TableRow>
@@ -291,45 +286,44 @@ const Dashboard = () => {
 
           {/* RIGHT COLUMN: ACTIONS & WALLET */}
           <div className="space-y-6">
-            
-            {/* 👇 NOVO CARD DE BALANCE (SALDO OPERACIONAL) */}
+
+            {/* CARD DE BALANCE (SALDO OPERACIONAL) */}
             <Card className="relative overflow-hidden p-6 border-emerald-500/20 bg-gradient-to-br from-emerald-950/50 to-black backdrop-blur-xl shadow-2xl group">
-               {/* Efeito de brilho no fundo */}
-               <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all duration-500" />
-               
-               <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 w-fit">
-                        <Wallet className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-wider">Caixa Operacional</span>
-                    </div>
-                    
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8 text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/10"
-                      onClick={() => setShowBalance(!showBalance)}
-                    >
-                       {showBalance ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                    </Button>
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all duration-500" />
+
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 w-fit">
+                    <Wallet className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Caixa Operacional</span>
                   </div>
 
-                  <div className="space-y-1 mb-2">
-                    {isLoadingBalance ? (
-                       <div className="h-10 w-32 bg-white/10 animate-pulse rounded" />
-                    ) : (
-                       <h3 className="text-4xl font-extrabold text-white tracking-tighter">
-                          {showBalance ? formatCurrency(balanceData?.saldo || 0) : "R$ ••••••••"}
-                       </h3>
-                    )}
-                    <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                       <TrendingUp className="w-3 h-3 text-emerald-500" /> Disponível para novos empréstimos
-                    </p>
-                  </div>
-               </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/10"
+                    onClick={() => setShowBalance(!showBalance)}
+                  >
+                    {showBalance ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  </Button>
+                </div>
+
+                <div className="space-y-1 mb-2">
+                  {isLoadingBalance ? (
+                    <div className="h-10 w-32 bg-white/10 animate-pulse rounded" />
+                  ) : (
+                    <h3 className="text-4xl font-extrabold text-white tracking-tighter">
+                      {showBalance ? formatCurrency(balanceData?.saldo || 0) : "R$ ••••••••"}
+                    </h3>
+                  )}
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3 text-emerald-500" /> Disponível para novos empréstimos
+                  </p>
+                </div>
+              </div>
             </Card>
 
-            {/* CARD DE AÇÕES RÁPIDAS (JÁ EXISTENTE) */}
+            {/* CARD DE AÇÕES RÁPIDAS */}
             <Card className="p-7 bg-card/40 border-white/5 shadow-2xl backdrop-blur-md">
               <h2 className="text-xl font-bold mb-8 flex items-center gap-3">
                 <div className="p-2 bg-primary/10 rounded-lg border border-primary/20">

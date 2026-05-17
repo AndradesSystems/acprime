@@ -1,18 +1,25 @@
 import { Card } from "@/components/ui/card";
 import { Wallet, Percent, TrendingUp, CheckCircle2 } from "lucide-react";
 
-// Tipagem para garantir que o componente entenda a nova estrutura
+// Tipagem estendida para suportar tanto o formato antigo quanto o novo da API local
 interface SubInfo {
   // Total Emprestado
   diario?: number;
   semanal?: number;
   mensal?: number;
-  // Juros (Estrutura nova)
+  
+  // Juros (Formato antigo)
   jurosMensal?: number;
   jurosParcelado?: number;
+  
+  // Juros (Formato novo vindo do back local)
+  jurosMensais?: number;
+  jurosParcelados?: number;
   taxas?: number;
+  
   // Montante
   parcelas?: number;
+  
   // Recebido
   viaParcelas?: number;
   viaMensal?: number;
@@ -78,16 +85,20 @@ export default function FinanceSummaryCard({ type, value, subInfo }: Props) {
               </>
             )}
 
-            {/* Detalhes para Juros e Taxas - AJUSTADO AQUI */}
+            {/* Detalhes para Juros e Taxas - AJUSTADO COM SUPORTE DUAL */}
             {type === "JUROS_A_RECEBER" && (
               <>
                 <div className="flex justify-between">
                   <span>Juros Mensais:</span>
-                  <span className="text-white">{format(subInfo.jurosMensal)}</span>
+                  <span className="text-white">
+                    {format(subInfo.jurosMensais ?? subInfo.jurosMensal)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Juros Parcelados:</span>
-                  <span className="text-white">{format(subInfo.jurosParcelado)}</span>
+                  <span className="text-white">
+                    {format(subInfo.jurosParcelados ?? subInfo.jurosParcelado)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Taxas:</span>
