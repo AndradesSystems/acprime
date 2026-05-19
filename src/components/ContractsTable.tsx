@@ -316,9 +316,9 @@ const ActionButtons = ({ c, onNotify, isNotifying, onHistoryContract, onSelectCo
       </AlertDialogContent>
     </AlertDialog>
 
-    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400" onClick={() => onHistoryContract(c)}>
+    {/* <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400" onClick={() => onHistoryContract(c)}>
       <History className="w-4 h-4" />
-    </Button>
+    </Button> */}
 
     <Button variant="ghost" size="icon" className="h-8 w-8 text-gold" disabled={c.status === "QUITADO"} onClick={() => onSelectContract(c)}>
       <CreditCard className="w-4 h-4" />

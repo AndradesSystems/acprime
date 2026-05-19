@@ -38,11 +38,14 @@ import {
   Plus,
   Minus,
   Search,
+  MessageSquare, // Ícone representativo para o WhatsApp nas bibliotecas base
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+// Importando o novo Modal de Conexão do WhatsApp
 
 // Importando os serviços
 import {
@@ -52,6 +55,7 @@ import {
   removeBalance,
   BalanceLog,
 } from "@/services/balance";
+import WhatsAppConnectModal from "@/components/WhatsappConectModal";
 
 export default function Balance() {
   // Estados
@@ -63,6 +67,7 @@ export default function Balance() {
   // Estado para Modais
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false); // Novo estado do modal de WhatsApp
   const [operationLoading, setOperationLoading] = useState(false);
 
   // Estados de Formulário
@@ -95,7 +100,7 @@ export default function Balance() {
     loadData();
   }, [loadData]);
 
-  // Formatador de Moeda (Para exibição no saldo e tabela)
+  // Formatador de Moeda
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -103,13 +108,9 @@ export default function Balance() {
     }).format(value);
   };
 
-  // 🟢 MÁSCARA DE MOEDA (Ao digitar)
-  // Ex: Digita '1' -> vira 'R$ 0,01'
-  // Ex: Digita '100' -> vira 'R$ 1,00'
+  // MÁSCARA DE MOEDA
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
-    
-    // 1. Remove tudo que não for número
     value = value.replace(/\D/g, "");
 
     if (value === "") {
@@ -117,10 +118,8 @@ export default function Balance() {
       return;
     }
 
-    // 2. Divide por 100 para considerar os centavos
     const numberValue = Number(value) / 100;
 
-    // 3. Formata para o padrão Brasileiro (BRL)
     setAmount(
       numberValue.toLocaleString("pt-BR", {
         style: "currency",
@@ -129,10 +128,8 @@ export default function Balance() {
     );
   };
 
-  // Handlers de Operação (Enviar para API)
+  // Handlers de Operação
   const handleTransaction = async (type: "DEPOSIT" | "WITHDRAW") => {
-    // 🟢 LIMPEZA DA MÁSCARA (Antes de enviar)
-    // Pega "R$ 1.000,00" -> Remove símbolos -> Divide por 100 -> Vira 1000.00
     const rawValue = Number(amount.replace(/\D/g, "")) / 100;
 
     if (!amount || rawValue <= 0) {
@@ -143,7 +140,7 @@ export default function Balance() {
     setOperationLoading(true);
     try {
       const payload = {
-        valor: rawValue, // Envia o número float limpo
+        valor: rawValue,
         descricao: description || (type === "DEPOSIT" ? "Aporte Manual" : "Retirada Manual"),
       };
 
@@ -155,7 +152,6 @@ export default function Balance() {
         toast({ title: "Sucesso!", description: "Retirada realizada com sucesso." });
       }
 
-      // Reset e Reload
       setAmount("");
       setDescription("");
       setIsDepositOpen(false);
@@ -186,7 +182,16 @@ export default function Balance() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground font-premium">Caixa Operacional</h1>
           <p className="text-muted-foreground mt-1">Gerencie aportes, retiradas e visualize o extrato completo.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+           {/* Botão de Conexão do WhatsApp adicionado ao Header */}
+           <Button 
+             variant="outline" 
+             className="border-[#25D366]/20 text-[#25D366] hover:bg-[#25D366]/10 hover:text-[#25D366] font-medium"
+             onClick={() => setIsWhatsAppOpen(true)}
+           >
+             <MessageSquare className="w-4 h-4 mr-2" /> Conectar WhatsApp
+           </Button>
+
            <Button variant="outline" className="border-white/10 text-muted-foreground hover:text-white" onClick={loadData}>
              <History className="w-4 h-4 mr-2" /> Atualizar
            </Button>
@@ -198,7 +203,6 @@ export default function Balance() {
         {/* COLUNA ESQUERDA: CARD PRINCIPAL */}
         <div className="lg:col-span-1 space-y-6">
           <Card className="relative overflow-hidden border-emerald-500/20 bg-gradient-to-br from-emerald-950 to-black shadow-2xl">
-            {/* Efeito Glow */}
             <div className="absolute -top-20 -right-20 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl" />
             
             <CardHeader className="relative z-10 pb-2">
@@ -244,7 +248,6 @@ export default function Balance() {
             </CardContent>
           </Card>
 
-          {/* Mini Estatísticas */}
           <div className="grid grid-cols-2 gap-4">
              <Card className="bg-card/40 border-white/5 p-4 flex flex-col justify-center items-center text-center">
                 <span className="text-xs text-muted-foreground">Total Entradas</span>
@@ -432,6 +435,12 @@ export default function Balance() {
            </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* --- MODAL DO WHATSAPP --- */}
+      <WhatsAppConnectModal 
+        open={isWhatsAppOpen} 
+        onClose={() => setIsWhatsAppOpen(false)} 
+      />
     </div>
   );
 }
