@@ -52,7 +52,8 @@ interface ContractsTableProps {
   setStatusFilter: (val: string) => void;
   isLoading: boolean;
   contracts: Contract[];
-  onNotify: (id: string) => void;
+  // 🟢 Ajustado: Agora onNotify recebe o contrato inteiro para extrairmos os novos parâmetros
+  onNotify: (contract: Contract) => void; 
   isNotifying: boolean;
   onDelete: (id: string) => void;
   onSelectContract: (c: Contract) => void;
@@ -311,14 +312,11 @@ const ActionButtons = ({ c, onNotify, isNotifying, onHistoryContract, onSelectCo
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-row gap-2 mt-4">
           <AlertDialogCancel className="flex-1 bg-white/5 border-none mt-0">Voltar</AlertDialogCancel>
-          <AlertDialogAction className="flex-1 bg-green-600" onClick={() => onNotify(c.id)}>Enviar</AlertDialogAction>
+          {/* 🟢 Ajustado: Agora passamos o objeto "c" inteiro na execução do onClick */}
+          <AlertDialogAction className="flex-1 bg-green-600" onClick={() => onNotify(c)}>Enviar</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-
-    {/* <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-400" onClick={() => onHistoryContract(c)}>
-      <History className="w-4 h-4" />
-    </Button> */}
 
     <Button variant="ghost" size="icon" className="h-8 w-8 text-gold" disabled={c.status === "QUITADO"} onClick={() => onSelectContract(c)}>
       <CreditCard className="w-4 h-4" />

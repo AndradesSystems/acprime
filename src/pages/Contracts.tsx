@@ -10,10 +10,10 @@ import { toast } from "sonner";
 import {
   listContracts,
   type Contract,
-  notifyContractClient,
   deleteContract,
 } from "@/services/contracts";
 import { getFinanceSummary, getPaymentsByPeriod } from "@/services/payment";
+import { sendWhatsAppMessage } from "@/services/whapp"; // 🟢 Mantido o seu serviço importado aqui
 
 import NewContractSheet from "@/components/NewContractSheet";
 import PaymentContractModal from "@/components/PaymentContractModal";
@@ -28,8 +28,7 @@ import ContractsTable from "@/components/ContractsTable";
 import PaymentsTable from "@/components/PaymentsTable";
 
 /* =================================================================================
-   OTIMIZAÇÃO 1: Funções auxiliares movidas para fora do componente.
-   Isso garante Igualdade Referencial (elas nunca são recriadas).
+   FUNÇÕES AUXILIARES MOVIDAS PARA FORA DO COMPONENTE
    ================================================================================= */
 const formatCurrency = (v: number | string) =>
   new Intl.NumberFormat("pt-BR", {
@@ -136,20 +135,30 @@ const Contracts = () => {
       queryClient.invalidateQueries({ queryKey: ["payments-period"] }),
     ]);
     setTimeout(() => setIsRefreshing(false), 500);
-    toast.info("Dados atualizados.");
+    toast.info("Dados updated.");
   };
 
   /* ===== MUTATIONS ===== */
+  // 🟢 Corrigido: Mantida apenas a nova estrutura de Mutation baseada no objeto Contract (Removida a duplicada antiga)
   const notifyMutation = useMutation({
-    mutationFn: (contractId: string) => notifyContractClient(contractId),
+    mutationFn: async (contract: Contract) => {
+      const phone = contract.client?.telefone || (contract.client as any)?.phone;
+      console.log(phone)
+      if (!phone) {
+        throw new Error("Este cliente não possui telefone cadastrado.");
+      }
+
+      // Monta o texto de forma dinâmica usando a helper local correta (formatDateIgnoreTimezone)
+      const message = `Olá, *${contract.client?.nome}*! Passando para lembrar do seu contrato com vencimento em ${formatDateIgnoreTimezone(contract.vencimentoEm)}. Valor em aberto: ${formatCurrency(contract.valorEmAberto)}.`;
+
+      return await sendWhatsAppMessage({ phone, message });
+    },
     onSuccess: () => {
-      toast.success("Mensagem de lembrete enviada com sucesso! 🤖");
+      toast.success("Notificação enviada com sucesso via WhatsApp! 🤖");
       queryClient.invalidateQueries({ queryKey: ["contracts"] });
     },
     onError: (error: any) => {
-      toast.error(
-        error.response?.data?.message || "Erro ao conectar com o robô.",
-      );
+      toast.error(error.message || "Falha ao enviar notificação.");
     },
   });
 
@@ -165,11 +174,12 @@ const Contracts = () => {
   });
 
   /* =================================================================================
-     OTIMIZAÇÃO 2: Callbacks memoizados para não recriar a função a cada render
+      CALLBACKS MEMOIZADOS
      ================================================================================= */
+  // 🟢 Adicionado: O handleNotify que estava faltando para a tabela poder disparar a ação
   const handleNotify = useCallback(
-    (id: string) => {
-      notifyMutation.mutate(id);
+    (contract: Contract) => {
+      notifyMutation.mutate(contract);
     },
     [notifyMutation],
   );
@@ -257,7 +267,7 @@ const Contracts = () => {
           />
         </div>
 
-        {/* TABELA CONTRATOS (Componentizada e Otimizada) */}
+        {/* TABELA CONTRATOS */}
         <ContractsTable
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
@@ -276,7 +286,7 @@ const Contracts = () => {
           getBadge={getPeriodicityBadge}
         />
 
-        {/* TABELA DE PAGAMENTOS REALIZADOS (Fluxo de Caixa) */}
+        {/* TABELA DE PAGAMENTOS REALIZADOS */}
         <PaymentsTable
           payments={payments}
           isLoading={isLoadingPayments}
