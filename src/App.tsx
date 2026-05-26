@@ -100,7 +100,7 @@ const App = () => (
 
           {/* 🔴 NOVA ROTA: QUADRO DE CALOTEIROS */}
           <Route
-            path="/caloteiros"
+            path="/inadimplentes"
             element={
               <PrivateRoute>
                 <Layout>

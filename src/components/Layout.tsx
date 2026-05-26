@@ -68,7 +68,7 @@ const Layout = ({ children }: LayoutProps) => {
       { icon: CreditCard, label: "Assinantes", path: "/subscriptions", adminOnly: true }, // 🔒 Apenas Admin
       { icon: FileText, label: "Contratos", path: "/contracts", adminOnly: false },
       { icon: Users, label: "Clientes", path: "/clients", adminOnly: false },
-      { icon: AlertTriangle, label: "Caloteiros", path: "/caloteiros", adminOnly: false }, // 🔴 Nova Rota incluída aqui
+      { icon: AlertTriangle, label: "Inadimplêntes", path: "/inadimplentes", adminOnly: false }, // 🔴 Nova Rota incluída aqui
       { icon: Wallet, label: "Caixa", path: "/balance", adminOnly: false },
     ];
 

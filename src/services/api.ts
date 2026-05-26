@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const api = axios.create({
-  baseURL: "https://acprime-api.onrender.com",
+  baseURL: "http://localhost:4004",
 });
 
 api.interceptors.request.use((config) => {
