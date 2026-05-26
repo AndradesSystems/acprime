@@ -170,7 +170,7 @@ export default function QuadroCaloteiros() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-5">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-red-500 font-premium flex items-center gap-2">
-              <AlertTriangle className="w-7 h-7 animate-pulse text-red-500" /> Quadro de Inadimplentes
+              <AlertTriangle className="w-7 h-7 animate-pulse text-red-500" /> Quadro de Inadimplêntes
             </h1>
             <p className="text-sm text-muted-foreground">Lista de inadimplentes do sistema com valores em aberto</p>
           </div>
