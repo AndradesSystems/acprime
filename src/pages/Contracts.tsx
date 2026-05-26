@@ -13,7 +13,8 @@ import {
   deleteContract,
 } from "@/services/contracts";
 import { getFinanceSummary, getPaymentsByPeriod } from "@/services/payment";
-import { sendWhatsAppMessage } from "@/services/whapp"; // 🟢 Mantido o seu serviço importado aqui
+import { sendWhatsAppMessage } from "@/services/whapp"; 
+import { toggleContractCaloteiroStatus, type CaloteiroAction } from "@/services/clients"; // 🔴 Importado o novo serviço de caloteiro
 
 import NewContractSheet from "@/components/NewContractSheet";
 import PaymentContractModal from "@/components/PaymentContractModal";
@@ -71,13 +72,12 @@ const Contracts = () => {
   /* ===== UI STATE ===== */
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedContract, setSelectedContract] = useState<Contract | null>(
-    null,
-  );
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [historyContract, setHistoryContract] = useState<Contract | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [dueDateContract, setDueDateContract] = useState<Contract | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [updatingCaloteiroId, setUpdatingCaloteiroId] = useState<string | null>(null); // 🔴 Estado de carregamento individual do botão
 
   /* ===== DATA FETCHING PREP ===== */
   const canFetch = useMemo(() => !!(range.from && range.to), [range]);
@@ -135,20 +135,17 @@ const Contracts = () => {
       queryClient.invalidateQueries({ queryKey: ["payments-period"] }),
     ]);
     setTimeout(() => setIsRefreshing(false), 500);
-    toast.info("Dados updated.");
+    toast.info("Dados atualizados.");
   };
 
   /* ===== MUTATIONS ===== */
-  // 🟢 Corrigido: Mantida apenas a nova estrutura de Mutation baseada no objeto Contract (Removida a duplicada antiga)
   const notifyMutation = useMutation({
     mutationFn: async (contract: Contract) => {
       const phone = contract.client?.telefone || (contract.client as any)?.phone;
-      console.log(phone)
       if (!phone) {
         throw new Error("Este cliente não possui telefone cadastrado.");
       }
 
-      // Monta o texto de forma dinâmica usando a helper local correta (formatDateIgnoreTimezone)
       const message = `Olá, *${contract.client?.nome}*! Passando para lembrar do seu contrato com vencimento em ${formatDateIgnoreTimezone(contract.vencimentoEm)}. Valor em aberto: ${formatCurrency(contract.valorEmAberto)}.`;
 
       return await sendWhatsAppMessage({ phone, message });
@@ -173,10 +170,33 @@ const Contracts = () => {
     },
   });
 
+  // 🔴 NOVA MUTATION: Trata a requisição de caloteiro e atualiza as tabelas em seguida
+  const toggleCaloteiroMutation = useMutation({
+    mutationFn: async ({ contractId, acao }: { contractId: string; acao: CaloteiroAction }) => {
+      setUpdatingCaloteiroId(contractId);
+      return await toggleContractCaloteiroStatus(contractId, acao);
+    },
+    onSuccess: (_, variables) => {
+      if (variables.acao === "MANDAR_PRO_QUADRO") {
+        toast.error("Contrato movido para o Quadro de Caloteiros! 🚨");
+      } else {
+        toast.success("Contrato rebaixado para Atrasado padrão.");
+      }
+      // Invalida a lista de contratos do período e de caloteiros globais
+      queryClient.invalidateQueries({ queryKey: ["contracts"] });
+      queryClient.invalidateQueries({ queryKey: ["caloteiros"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Erro ao tentar alterar o status de caloteiro.");
+    },
+    onSettled: () => {
+      setUpdatingCaloteiroId(null);
+    },
+  });
+
   /* =================================================================================
-      CALLBACKS MEMOIZADOS
+     CALLBACKS MEMOIZADOS
      ================================================================================= */
-  // 🟢 Adicionado: O handleNotify que estava faltando para a tabela poder disparar a ação
   const handleNotify = useCallback(
     (contract: Contract) => {
       notifyMutation.mutate(contract);
@@ -189,6 +209,14 @@ const Contracts = () => {
       deleteMutation.mutate(id);
     },
     [deleteMutation],
+  );
+
+  // 🔴 NOVO CALLBACK: Aciona a mutação ao clicar no botão da tabela
+  const handleToggleCaloteiro = useCallback(
+    (contractId: string, acao: CaloteiroAction) => {
+      toggleCaloteiroMutation.mutate({ contractId, acao });
+    },
+    [toggleCaloteiroMutation],
   );
 
   /* ===== FILTROS E HELPERS ===== */
@@ -281,6 +309,8 @@ const Contracts = () => {
           onSelectContract={setSelectedContract}
           onHistoryContract={setHistoryContract}
           onDueDateContract={setDueDateContract}
+          onToggleCaloteiro={handleToggleCaloteiro} // 🔴 Passado o manipulador para o componente da tabela
+          isUpdatingCaloteiro={updatingCaloteiroId} // 🔴 Passado o ID de carregamento atual
           formatCurrency={formatCurrency}
           formatDate={formatDateIgnoreTimezone}
           getBadge={getPeriodicityBadge}

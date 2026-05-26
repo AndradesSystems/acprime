@@ -11,7 +11,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { User } from "lucide-react";
+import { User, Upload, Eye, ImageIcon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 import {
@@ -80,6 +80,15 @@ const ClientSheet = ({
 }: ClientSheetProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // Estado para gerenciar os arquivos locais selecionados
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  
+  // 🟢 Estado para armazenar os previews criados a partir dos arquivos locais
+  const [localPreviews, setLocalPreviews] = useState<string[]>([]);
+  
+  // 🟢 Estado para rastrear imagens antigas já salvas no banco
+  const [savedPhotos, setSavedPhotos] = useState<string[]>([]);
 
   const [formData, setFormData] = useState<ClientInput>({
     nome: "",
@@ -105,9 +114,26 @@ const ClientSheet = ({
         dataNascimento: client.dataNascimento ?? "",
         endereco: client.endereco ?? "",
       });
+      setSelectedFiles([]);
+      setLocalPreviews([]);
+      setSavedPhotos(client.images ?? []); // 🟢 Alimenta com as fotos já salvas no banco de dados
       setIsOpen(true);
     }
   }, [client]);
+
+  // 🟢 Cria URLs de efeito colateral para preview dos arquivos locais selecionados pelo navegador
+  useEffect(() => {
+    if (selectedFiles.length === 0) {
+      setLocalPreviews([]);
+      return;
+    }
+
+    const objectUrls = selectedFiles.map((file) => URL.createObjectURL(file));
+    setLocalPreviews(objectUrls);
+
+    // Evita vazamento de memória revogando as URLs antigas se o input mudar
+    return () => objectUrls.forEach((url) => URL.revokeObjectURL(url));
+  }, [selectedFiles]);
 
   // Controla o fechamento e limpa os estados correspondentes
   const handleOpenChange = (open: boolean) => {
@@ -127,7 +153,18 @@ const ClientSheet = ({
       dataNascimento: "",
       endereco: "",
     });
+    setSelectedFiles([]);
+    setLocalPreviews([]);
+    setSavedPhotos([]);
     setIsOpen(false);
+  };
+
+  // Captura a alteração do input de arquivos do navegador
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      setSelectedFiles(filesArray);
+    }
   };
 
   /* =======================
@@ -141,12 +178,12 @@ const ClientSheet = ({
     try {
       const payload: ClientInput = {
         nome: formData.nome.trim(),
-        // Enviamos apenas os números limpos para a API
         cpf: formData.cpf.replace(/\D/g, ""),
         telefone: formData.telefone.replace(/\D/g, ""),
         email: formData.email?.trim() ? formData.email.trim() : null,
         dataNascimento: formData.dataNascimento || null,
         endereco: formData.endereco?.trim() ? formData.endereco.trim() : null,
+        documentos: selectedFiles.length > 0 ? selectedFiles : undefined,
       };
 
       const saved = client
@@ -265,6 +302,71 @@ const ClientSheet = ({
                 })
               }
             />
+          </div>
+
+          {/* Seleção de Fotos e Documentos (Opcional) */}
+          <div className="space-y-2">
+            <Label htmlFor="documentos" className="flex items-center gap-1.5 cursor-pointer">
+              <Upload className="w-4 h-4 text-muted-foreground" />
+              Documentos e Fotos do Cliente
+            </Label>
+            <Input
+              id="documentos"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileChange}
+              className="cursor-pointer file:text-primary file:font-medium"
+            />
+            
+            {/* 🟢 SEÇÃO DE PREVIEW INTEGRADA */}
+            {(savedPhotos.length > 0 || localPreviews.length > 0) && (
+              <div className="border border-white/5 bg-black/20 rounded-lg p-3 mt-2 space-y-3">
+                <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                  <ImageIcon className="w-3.5 h-3.5 text-gold" /> Preview dos anexos:
+                </p>
+                
+                <div className="grid grid-cols-4 gap-2">
+                  {/* Renderiza fotos vindas do Servidor (Antigas) */}
+                  {savedPhotos.map((url, idx) => (
+                    <div 
+                      key={`saved-${idx}`} 
+                      className="group relative aspect-square border border-white/10 rounded overflow-hidden bg-zinc-900 cursor-pointer"
+                      onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                      title="Ver imagem original"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="Salva" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Eye className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <span className="absolute bottom-0 inset-x-0 bg-emerald-600 text-[8px] text-center text-white py-0.5 font-bold uppercase tracking-wider">
+                        Salva
+                      </span>
+                    </div>
+                  ))}
+
+                  {/* Renderiza fotos Carregadas Localmente (Novas) */}
+                  {localPreviews.map((url, idx) => (
+                    <div 
+                      key={`local-${idx}`} 
+                      className="group relative aspect-square border border-gold/30 rounded overflow-hidden bg-zinc-900 cursor-pointer"
+                      onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                      title="Ver preview ampliado"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Eye className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <span className="absolute bottom-0 inset-x-0 bg-amber-500 text-[8px] text-zinc-950 text-center py-0.5 font-bold uppercase tracking-wider">
+                        Nova
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-4">

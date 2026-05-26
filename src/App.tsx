@@ -15,6 +15,7 @@ import Layout from "./components/Layout";
 import NotFound from "./pages/NotFound";
 import { authService } from "@/lib/auth";
 import Balance from "./pages/Balance";
+import QuadroCaloteiros from "./pages/QuadroCaloteiros";
 
 const queryClient = new QueryClient();
 
@@ -92,6 +93,18 @@ const App = () => (
               <PrivateRoute>
                 <Layout>
                   <Clients />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+
+          {/* 🔴 NOVA ROTA: QUADRO DE CALOTEIROS */}
+          <Route
+            path="/caloteiros"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <QuadroCaloteiros />
                 </Layout>
               </PrivateRoute>
             }

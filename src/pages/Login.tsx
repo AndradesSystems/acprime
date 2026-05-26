@@ -184,7 +184,7 @@ const AuthPage = () => {
             <h1 className="text-3xl font-bold tracking-tight text-white transition-all">
               {isLogin ? "Acesse sua conta" : "Crie sua conta"}
             </h1>
-            <p className="text-yellow-600 font-medium text-sm">Onde o dinheiro encontra estratégia.</p>
+            <p className="text-yellow-600 font-medium text-sm">Automatize cobranças, organize clientes e reduza inadimplencia.</p>
             <p className="text-zinc-400 text-sm">
               {isLogin ? "Entre com suas credenciais para continuar." : "Preencha os dados abaixo para se registrar corporativamente."}
             </p>

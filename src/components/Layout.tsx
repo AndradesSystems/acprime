@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   Wallet,
+  AlertTriangle, // 🔴 Importado para o ícone do Quadro de Caloteiros
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -58,7 +59,7 @@ const Layout = ({ children }: LayoutProps) => {
   };
 
   /* =========================================================
-      MENU ITEMS FILTRADOS
+      MENU ITEMS FILTRADOS (COM CALOTEIROS INCLUÍDO)
   ========================================================= */
   const menuItems = useMemo(() => {
     const items = [
@@ -67,8 +68,8 @@ const Layout = ({ children }: LayoutProps) => {
       { icon: CreditCard, label: "Assinantes", path: "/subscriptions", adminOnly: true }, // 🔒 Apenas Admin
       { icon: FileText, label: "Contratos", path: "/contracts", adminOnly: false },
       { icon: Users, label: "Clientes", path: "/clients", adminOnly: false },
+      { icon: AlertTriangle, label: "Caloteiros", path: "/caloteiros", adminOnly: false }, // 🔴 Nova Rota incluída aqui
       { icon: Wallet, label: "Caixa", path: "/balance", adminOnly: false },
-
     ];
 
     // Se não for admin, remove os itens que são "adminOnly"
@@ -143,6 +144,9 @@ const Layout = ({ children }: LayoutProps) => {
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
 
+            // Destaque visual vermelho discreto se o item ativo for o de Caloteiros
+            const isCaloteiros = item.path === "/caloteiros";
+
             return (
               <button
                 key={item.path}
@@ -150,11 +154,24 @@ const Layout = ({ children }: LayoutProps) => {
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group",
                   isActive
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    ? isCaloteiros
+                      ? "bg-red-600 text-white shadow-lg shadow-red-600/20"
+                      : "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                    : isCaloteiros 
+                      ? "text-zinc-400 hover:text-red-400 hover:bg-red-500/5" 
+                      : "text-zinc-400 hover:text-white hover:bg-white/5"
                 )}
               >
-                <item.icon className={cn("w-5 h-5 flex-shrink-0", isActive ? "text-white" : "group-hover:text-white")} />
+                <item.icon 
+                  className={cn(
+                    "w-5 h-5 flex-shrink-0", 
+                    isActive 
+                      ? "text-white" 
+                      : isCaloteiros 
+                        ? "group-hover:text-red-400" 
+                        : "group-hover:text-white"
+                  )} 
+                />
                 <span className={cn(
                     "whitespace-nowrap transition-opacity duration-300 font-medium",
                     !isSidebarOpen && "md:opacity-0 md:hidden"

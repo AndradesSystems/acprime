@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreVertical,
+  AlertTriangle, // 🔴 Importado para identificar a funcionalidade de caloteiro
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Contract } from "@/services/contracts";
+import { CaloteiroAction } from "@/services/clients"; // Importado do service de clientes criado anteriormente
 
 interface ContractsTableProps {
   searchTerm: string;
@@ -52,13 +54,14 @@ interface ContractsTableProps {
   setStatusFilter: (val: string) => void;
   isLoading: boolean;
   contracts: Contract[];
-  // 🟢 Ajustado: Agora onNotify recebe o contrato inteiro para extrairmos os novos parâmetros
   onNotify: (contract: Contract) => void; 
   isNotifying: boolean;
   onDelete: (id: string) => void;
   onSelectContract: (c: Contract) => void;
   onHistoryContract: (c: Contract) => void;
   onDueDateContract: (c: Contract) => void;
+  onToggleCaloteiro?: (contractId: string, acao: CaloteiroAction) => void; // 🔴 Nova ação adicionada à interface
+  isUpdatingCaloteiro?: string | null; // ID do contrato atualmente sofrendo mutação de caloteiro
   formatCurrency: (v: number | string) => string;
   formatDate: (d: string) => string;
   getBadge: (type: string) => { label: string; className: string };
@@ -78,6 +81,8 @@ const ContractsTable = memo(
     onSelectContract,
     onHistoryContract,
     onDueDateContract,
+    onToggleCaloteiro,
+    isUpdatingCaloteiro,
     formatCurrency,
     formatDate,
     getBadge,
@@ -123,6 +128,7 @@ const ContractsTable = memo(
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="ABERTO">Aberto</SelectItem>
                 <SelectItem value="ATRASADO">Atrasado</SelectItem>
+                <SelectItem value="CALOTEIRO">Caloteiro</SelectItem> {/* 🔴 Adicionado opção de filtro */}
                 <SelectItem value="COBRANCA_PESSOAL">Cobrança</SelectItem>
               </SelectContent>
             </Select>
@@ -153,7 +159,7 @@ const ContractsTable = memo(
                 <DesktopRow
                   key={c.id}
                   c={c}
-                  {...{ getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete }}
+                  {...{ getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }}
                 />
               ))}
             </TableBody>
@@ -171,7 +177,7 @@ const ContractsTable = memo(
               <MobileCard
                 key={c.id}
                 c={c}
-                {...{ getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete }}
+                {...{ getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }}
               />
             ))
           )}
@@ -221,7 +227,7 @@ const ContractsTable = memo(
 
 /* COMPONENTS AUXILIARES PARA LIMPEZA DE CÓDIGO */
 
-const DesktopRow = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete }: any) => {
+const DesktopRow = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }: any) => {
   const badge = getBadge(c.periodicity);
   return (
     <TableRow className="border-white/5 hover:bg-white/5 transition-colors">
@@ -250,13 +256,13 @@ const DesktopRow = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract
         </button>
       </TableCell>
       <TableCell className="text-right">
-        <ActionButtons c={c} {...{ onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete }} />
+        <ActionButtons c={c} {...{ onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }} />
       </TableCell>
     </TableRow>
   );
 };
 
-const MobileCard = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete }: any) => {
+const MobileCard = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }: any) => {
   const badge = getBadge(c.periodicity);
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
@@ -289,52 +295,91 @@ const MobileCard = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract
           <span className="text-gray-400">Juros: {c.jurosPercent}%</span>
           {Number(c.taxa) > 0 && <span className="text-red-400">Taxa: {formatCurrency(c.taxa)}</span>}
         </div>
-        <ActionButtons c={c} {...{ onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete }} />
+        <ActionButtons c={c} {...{ onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }} />
       </div>
     </div>
   );
 };
 
-const ActionButtons = ({ c, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete }: any) => (
-  <div className="flex items-center justify-end gap-1">
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500" disabled={isNotifying}>
-          {isNotifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquareShare className="w-4 h-4" />}
+const ActionButtons = ({ c, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }: any) => {
+  const isCaloteiro = c.status === "CALOTEIRO";
+  const loadingCaloteiro = isUpdatingCaloteiro === c.id;
+
+  const handleToggleCaloteiroClick = () => {
+    if (onToggleCaloteiro) {
+      const acao = isCaloteiro ? "TIRAR_DO_QUADRO" : "MANDAR_PRO_QUADRO";
+      onToggleCaloteiro(c.id, acao);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-end gap-1">
+      
+      {/* 🔴 NOVO BOTÃO: ALTERNAR QUADRO DE CALOTEIROS */}
+      {onToggleCaloteiro && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`h-8 w-8 transition-colors ${
+            isCaloteiro 
+              ? "text-red-500 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20" 
+              : "text-zinc-500 hover:text-red-400 hover:bg-white/5"
+          }`}
+          disabled={loadingCaloteiro || c.status === "QUITADO"}
+          onClick={handleToggleCaloteiroClick}
+          title={isCaloteiro ? "Remover do Quadro de Caloteiros" : "Mandar para o Quadro de Caloteiros"}
+        >
+          {loadingCaloteiro ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <AlertTriangle className="w-4 h-4" />
+          )}
         </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent className="bg-[#071e30] border-white/10 text-white w-[95vw] max-w-md rounded-lg">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Notificar Cliente?</AlertDialogTitle>
-          <AlertDialogDescription className="text-gray-400">
-            Enviar mensagem para <strong>{c.client?.nome}</strong>?
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter className="flex-row gap-2 mt-4">
-          <AlertDialogCancel className="flex-1 bg-white/5 border-none mt-0">Voltar</AlertDialogCancel>
-          {/* 🟢 Ajustado: Agora passamos o objeto "c" inteiro na execução do onClick */}
-          <AlertDialogAction className="flex-1 bg-green-600" onClick={() => onNotify(c)}>Enviar</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      )}
 
-    <Button variant="ghost" size="icon" className="h-8 w-8 text-gold" disabled={c.status === "QUITADO"} onClick={() => onSelectContract(c)}>
-      <CreditCard className="w-4 h-4" />
-    </Button>
+      <NavbarNotificationWrapper c={c} {...{ onNotify, isNotifying }} />
 
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500"><Trash2 className="w-4 h-4" /></Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent className="bg-[#071e30] border-white/10 text-white w-[95vw] max-w-md rounded-lg">
-        <AlertDialogHeader><AlertDialogTitle>Excluir?</AlertDialogTitle></AlertDialogHeader>
-        <AlertDialogFooter className="flex-row gap-2">
-          <AlertDialogCancel className="flex-1 bg-white/5 border-none mt-0">Não</AlertDialogCancel>
-          <AlertDialogAction className="flex-1 bg-red-600" onClick={() => onDelete(c.id)}>Sim</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  </div>
+      <Button variant="ghost" size="icon" className="h-8 w-8 text-gold" disabled={c.status === "QUITADO"} onClick={() => onSelectContract(c)}>
+        <CreditCard className="w-4 h-4" />
+      </Button>
+
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500"><Trash2 className="w-4 h-4" /></Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent className="bg-[#071e30] border-white/10 text-white w-[95vw] max-w-md rounded-lg">
+          <AlertDialogHeader><AlertDialogTitle>Excluir?</AlertDialogTitle></AlertDialogHeader>
+          <AlertDialogFooter className="flex-row gap-2">
+            <AlertDialogCancel className="flex-1 bg-white/5 border-none mt-0">Não</AlertDialogCancel>
+            <AlertDialogAction className="flex-1 bg-red-600" onClick={() => onDelete(c.id)}>Sim</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+};
+
+/* Separador auxiliar para manter o AlertDialog isolado */
+const NavbarNotificationWrapper = ({ c, onNotify, isNotifying }: any) => (
+  <AlertDialog>
+    <AlertDialogTrigger asChild>
+      <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500" disabled={isNotifying}>
+        {isNotifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquareShare className="w-4 h-4" />}
+      </Button>
+    </AlertDialogTrigger>
+    <AlertDialogContent className="bg-[#071e30] border-white/10 text-white w-[95vw] max-w-md rounded-lg">
+      <AlertDialogHeader>
+        <AlertDialogTitle>Notificar Cliente?</AlertDialogTitle>
+        <AlertDialogDescription className="text-gray-400">
+          Enviar mensagem para <strong>{c.client?.nome}</strong>?
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter className="flex-row gap-2 mt-4">
+        <AlertDialogCancel className="flex-1 bg-white/5 border-none mt-0">Voltar</AlertDialogCancel>
+        <AlertDialogAction className="flex-1 bg-green-600" onClick={() => onNotify(c)}>Enviar</AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 );
 
 ContractsTable.displayName = "ContractsTable";
