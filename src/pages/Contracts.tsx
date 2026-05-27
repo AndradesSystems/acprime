@@ -231,7 +231,7 @@ const Contracts = () => {
   }, [contracts, searchTerm, statusFilter]);
 
   return (
-    <div className="min-h-screen bg-gradient-dark p-6 text-white">
+    <div className="min-h-screen  bg-[#0a0e17] p-6 text-white">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row md:justify-between gap-4">

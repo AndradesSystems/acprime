@@ -163,7 +163,7 @@ export default function QuadroCaloteiros() {
   };
 
   return (
-    <div className="min-h-screen p-6 text-white bg-transparent">
+    <div className="min-h-screen p-6 text-white  bg-[#0a0e17]">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* HEADER DA NOVA PÁGINA */}

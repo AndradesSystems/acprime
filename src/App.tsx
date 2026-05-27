@@ -1,3 +1,5 @@
+"use client";
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,6 +18,10 @@ import NotFound from "./pages/NotFound";
 import { authService } from "@/lib/auth";
 import Balance from "./pages/Balance";
 import QuadroCaloteiros from "./pages/QuadroCaloteiros";
+
+// IMPORTAÇÕES DAS NOVAS TELAS
+import Score from "./pages/Score";
+import Backup from "./pages/Backup";
 
 const queryClient = new QueryClient();
 
@@ -98,13 +104,36 @@ const App = () => (
             }
           />
 
-          {/* 🔴 NOVA ROTA: QUADRO DE CALOTEIROS */}
           <Route
             path="/inadimplentes"
             element={
               <PrivateRoute>
                 <Layout>
                   <QuadroCaloteiros />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+
+          {/* 🟢 ROTA ATUALIZADA: SCORE DE CLIENTES */}
+          <Route
+            path="/score"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Score />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+
+          {/* 🟢 ROTA ATUALIZADA: BACKUP DO SISTEMA */}
+          <Route
+            path="/backup"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Backup />
                 </Layout>
               </PrivateRoute>
             }

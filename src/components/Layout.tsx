@@ -10,7 +10,9 @@ import {
   Menu,
   X,
   Wallet,
-  AlertTriangle, // 🔴 Importado para o ícone do Quadro de Caloteiros
+  AlertTriangle,
+  ShieldAlert, // 🟢 Ícone para o Score de Crédito
+  Database,    // 🟢 Ícone para o Backup
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -59,7 +61,7 @@ const Layout = ({ children }: LayoutProps) => {
   };
 
   /* =========================================================
-      MENU ITEMS FILTRADOS (COM CALOTEIROS INCLUÍDO)
+      MENU ITEMS FILTRADOS (COM ADIÇÃO DE SCORE E BACKUP)
   ========================================================= */
   const menuItems = useMemo(() => {
     const items = [
@@ -68,8 +70,10 @@ const Layout = ({ children }: LayoutProps) => {
       { icon: CreditCard, label: "Assinantes", path: "/subscriptions", adminOnly: true }, // 🔒 Apenas Admin
       { icon: FileText, label: "Contratos", path: "/contracts", adminOnly: false },
       { icon: Users, label: "Clientes", path: "/clients", adminOnly: false },
-      { icon: AlertTriangle, label: "Inadimplêntes", path: "/inadimplentes", adminOnly: false }, // 🔴 Nova Rota incluída aqui
+      { icon: AlertTriangle, label: "Inadimplentes", path: "/inadimplentes", adminOnly: false },
+      { icon: ShieldAlert, label: "Score de Crédito", path: "/score", adminOnly: false }, // 🟢 Nova Rota
       { icon: Wallet, label: "Caixa", path: "/balance", adminOnly: false },
+      { icon: Database, label: "Backup", path: "/backup", adminOnly: true }, // 🟢 Nova Rota (🔒 Geralmente restrito a Admin)
     ];
 
     // Se não for admin, remove os itens que são "adminOnly"
@@ -144,8 +148,8 @@ const Layout = ({ children }: LayoutProps) => {
           {menuItems.map((item) => {
             const isActive = location.pathname === item.path;
 
-            // Destaque visual vermelho discreto se o item ativo for o de Caloteiros
-            const isCaloteiros = item.path === "/caloteiros";
+            // Destaque visual vermelho discreto se o item ativo for o de Inadimplentes
+            const isInadimplentes = item.path === "/inadimplentes";
 
             return (
               <button
@@ -154,10 +158,10 @@ const Layout = ({ children }: LayoutProps) => {
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all group",
                   isActive
-                    ? isCaloteiros
+                    ? isInadimplentes
                       ? "bg-red-600 text-white shadow-lg shadow-red-600/20"
                       : "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                    : isCaloteiros 
+                    : isInadimplentes 
                       ? "text-zinc-400 hover:text-red-400 hover:bg-red-500/5" 
                       : "text-zinc-400 hover:text-white hover:bg-white/5"
                 )}
@@ -167,7 +171,7 @@ const Layout = ({ children }: LayoutProps) => {
                     "w-5 h-5 flex-shrink-0", 
                     isActive 
                       ? "text-white" 
-                      : isCaloteiros 
+                      : isInadimplentes 
                         ? "group-hover:text-red-400" 
                         : "group-hover:text-white"
                   )} 

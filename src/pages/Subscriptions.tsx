@@ -185,7 +185,7 @@ const Subscriptions = () => {
   };
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 text-white bg-gradient-dark">
+    <div className="min-h-screen p-4 sm:p-6 text-white bg-[#0a0e17]">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
