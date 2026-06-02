@@ -35,13 +35,33 @@ const formatCPF = (value: string) => {
 };
 
 const formatTelefone = (value: string) => {
+  // Remove tudo o que não for número
   const digits = value.replace(/\D/g, "");
+
+  // --- REGRA PARA PORTUGAL (DDI 351 + 9 dígitos = 12 dígitos) ---
+  // Exemplo: 351912345678 -> +351 912 345 678
+  if (digits.startsWith("351") && digits.length === 12) {
+    return digits
+      .replace(/(\d{3})(\d{3})(\d{3})(\d{3})/, "+$1 $2 $3 $4");
+  }
+  
+  // Se o usuário digitou um número de Portugal sem o DDI (apenas os 9 dígitos começando com 9)
+  // Exemplo: 912345678 -> 912 345 678
+  if (digits.length === 9 && (digits.startsWith("91") || digits.startsWith("92") || digits.startsWith("93") || digits.startsWith("96"))) {
+    return digits
+      .replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
+  }
+
+  // --- REGRA PARA O BRASIL (DDD 71, etc.) ---
+  // Fixo ou celular antigo (8 dígitos): (71) 3333-3333
   if (digits.length <= 10) {
     return digits
       .replace(/(\d{2})(\d)/, "($1) $2")
       .replace(/(\d{4})(\d)/, "$1-$2")
       .substring(0, 14);
   }
+
+  // Celular com 9 dígitos: (71) 99999-9999
   return digits
     .replace(/(\d{2})(\d)/, "($1) $2")
     .replace(/(\d{5})(\d)/, "$1-$2")

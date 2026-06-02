@@ -38,14 +38,12 @@ import {
    Plus,
    Minus,
    Search,
-   MessageSquare, // Ícone representativo para o WhatsApp nas bibliotecas base
+   MessageSquare,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
-// Importando o novo Modal de Conexão do WhatsApp
 
 // Importando os serviços
 import {
@@ -63,17 +61,36 @@ export default function Balance() {
    const [logs, setLogs] = useState<BalanceLog[]>([]);
    const [loading, setLoading] = useState(true);
    const [showBalance, setShowBalance] = useState(true);
+   
+   // 🟢 NOVO ESTADO: Armazena se o usuário atual possui o plano PRO habilitado
+   const [isProUser, setIsProUser] = useState<boolean>(false);
 
    // Estado para Modais
    const [isDepositOpen, setIsDepositOpen] = useState(false);
    const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
-   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false); // Novo estado do modal de WhatsApp
+   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
    const [operationLoading, setOperationLoading] = useState(false);
 
    // Estados de Formulário
    const [amount, setAmount] = useState("");
    const [description, setDescription] = useState("");
    const [searchTerm, setSearchTerm] = useState("");
+
+   // 🟢 VALIDAÇÃO DE PLANO: Executada no carregamento do cliente (Next.js/React SSR-safe)
+   useEffect(() => {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+         try {
+            const userObj = JSON.parse(storedUser);
+            // Altere para a string exata do seu banco de dados, assumindo que seja "PRO"
+            if (userObj && userObj.plan === "PRO") {
+               setIsProUser(true);
+            }
+         } catch (e) {
+            console.error("Erro ao converter objeto de usuário do localStorage", e);
+         }
+      }
+   }, []);
 
    // Carregamento de Dados
    const loadData = useCallback(async () => {
@@ -183,14 +200,17 @@ export default function Balance() {
                <p className="text-muted-foreground mt-1">Gerencie aportes, retiradas e visualize o extrato completo.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-               {/* Botão de Conexão do WhatsApp adicionado ao Header */}
-               <Button
-                  variant="outline"
-                  className="border-[#25D366]/20 text-[#25D366] hover:bg-[#25D366]/10 hover:text-[#25D366] font-medium"
-                  onClick={() => setIsWhatsAppOpen(true)}
-               >
-                  <MessageSquare className="w-4 h-4 mr-2" /> Conectar WhatsApp
-               </Button>
+               
+               {/* 🟢 VALIDAÇÃO CONDICIONAL: O botão só renderiza se 'isProUser' for verdadeiro */}
+               {isProUser && (
+                  <Button
+                     variant="outline"
+                     className="border-[#25D366]/20 text-[#25D366] hover:bg-[#25D366]/10 hover:text-[#25D366] font-medium"
+                     onClick={() => setIsWhatsAppOpen(true)}
+                  >
+                     <MessageSquare className="w-4 h-4 mr-2" /> Conectar WhatsApp
+                  </Button>
+               )}
 
                <Button variant="outline" className="border-white/10 text-muted-foreground hover:text-white" onClick={loadData}>
                   <History className="w-4 h-4 mr-2" /> Atualizar

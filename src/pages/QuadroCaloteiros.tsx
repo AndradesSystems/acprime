@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Search,
@@ -26,9 +28,12 @@ import {
   User,
   Percent,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  FileSpreadsheet,
+  Handshake,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 import {
   getCaloteiros,
@@ -36,6 +41,7 @@ import {
 } from "@/services/clients";
 
 import ClientContractsModal from "@/components/ClientesContractsModal";
+import CreateNegotiationModal from "@/components/NegotiationModal";
 
 // --- HELPERS DE FORMATAÇÃO ---
 const formatCPF = (value: string) => {
@@ -73,13 +79,17 @@ export default function QuadroCaloteiros() {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Mapa de controle para alternar a visualização individual de cada Card (Cadastro <-> Débitos)
-  const [showDebtsMap, setShowDebtsMap] = useState<Record<string, boolean>>({});
+  // Estado para gerenciar qual cliente está com o modal de débitos aberto
+  const [selectedDebtsClient, setSelectedDebtsClient] = useState<Client | null>(null);
 
   // Estados para o modal de histórico de contratos
   const [contractsOpen, setContractsOpen] = useState(false);
   const [contractsClientId, setContractsClientId] = useState<string | null>(null);
   const [contractsClientName, setContractsClientName] = useState<string | undefined>();
+
+  // ESTADOS CORRIGIDOS PARA O NOVO FORMATO DO MODAL DE NEGOCIAÇÃO
+  const [negotiationOpen, setNegotiationOpen] = useState(false);
+  const [selectedContractForNegotiation, setSelectedContractForNegotiation] = useState<any | null>(null);
 
   // Estados para a galeria de imagens/provas anexadas
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -87,7 +97,7 @@ export default function QuadroCaloteiros() {
   const [selectedClientName, setSelectedClientName] = useState("");
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6; // Grid 3x2 ideal para visualização de cartões
+  const itemsPerPage = 6;
 
   const loadCaloteiros = async () => {
     try {
@@ -104,13 +114,6 @@ export default function QuadroCaloteiros() {
   useEffect(() => {
     loadCaloteiros();
   }, []);
-
-  const toggleCardView = (clientId: string) => {
-    setShowDebtsMap((prev) => ({
-      ...prev,
-      [clientId]: !prev[clientId],
-    }));
-  };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -162,265 +165,370 @@ export default function QuadroCaloteiros() {
     setGalleryOpen(true);
   };
 
+  // FUNÇÃO AUXILIAR PARA PASSAR O CONTRATO
+  const handleOpenNegotiation = (contract: any) => {
+    setSelectedContractForNegotiation(contract);
+    setNegotiationOpen(true);
+  };
+
   return (
-    <div className="min-h-screen p-6 text-white  bg-[#0a0e17]">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* HEADER DA NOVA PÁGINA */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-5">
+    <div className="min-h-screen p-6 text-white bg-[#060913]">
+      <div className="max-w-7xl mx-auto space-y-8">
+
+        {/* HEADER DA PÁGINA */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-white/5">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-red-500 font-premium flex items-center gap-2">
-              <AlertTriangle className="w-7 h-7 animate-pulse text-red-500" /> Quadro de Inadimplêntes
+            <div className="flex items-center gap-2 text-rose-400 text-xs font-semibold uppercase tracking-widest">
+              <AlertTriangle className="w-4 h-4 text-rose-500 animate-pulse" /> Restrição Provedora de Risco
+            </div>
+            <h1 className="text-4xl font-black tracking-tight text-white mt-1 bg-clip-text text-transparent bg-gradient-to-r from-white via-zinc-200 to-zinc-400">
+              Quadro de Inadimplentes
             </h1>
-            <p className="text-sm text-muted-foreground">Lista de inadimplentes do sistema com valores em aberto</p>
+            <p className="text-sm text-zinc-400 mt-1">Lista consolidada de quebras de contratos ativos e restrições financeiras internas.</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <div className="relative flex-1 sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <Input
+                placeholder="Buscar por Nome, CPF..."
+                className="pl-9 bg-zinc-900/40 border-white/10 text-white focus-visible:ring-zinc-700 h-10 rounded-xl backdrop-blur-sm focus:ring-rose-500 focus-visible:ring-rose-950"
+                value={searchTerm}
+                onChange={handleSearchChange}
+              />
+            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="border-white/10 bg-zinc-900/60 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all h-10 w-10 rounded-xl backdrop-blur-sm"
+              onClick={loadCaloteiros}
+              disabled={loading}
+            >
+              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            </Button>
           </div>
         </div>
 
-        {/* CONTAINER DO FILTRO DE BUSCA */}
-        <Card className="p-4 md:p-6 bg-card/50 border-white/10 backdrop-blur-md shadow-xl">
-          <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-            <h2 className="text-lg font-semibold text-red-400/90 flex items-center gap-2">
-              <Search className="w-5 h-5 text-red-500" /> Localizar Devedores Ativos
-            </h2>
-            <div className="flex gap-2">
-              <div className="relative flex-1 md:flex-none">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por Nome, CPF..."
-                  className="pl-10 bg-white/5 border-white/10 w-full md:w-[300px] text-white focus:ring-red-500 focus-visible:ring-red-500"
-                  value={searchTerm}
-                  onChange={handleSearchChange}
-                />
-              </div>
+        {/* FEEDBACK DE CARREGAMENTO */}
+        {loading ? (
+          <div className="py-24 text-center text-zinc-400 flex flex-col items-center gap-3">
+            <Loader2 className="w-9 h-9 animate-spin text-rose-500" />
+            <p className="text-sm font-medium">Cruzando dados de fluxo de caixa e atrasos em aberto...</p>
+          </div>
+        ) : currentClients.length === 0 ? (
+          <div className="py-16 text-center text-zinc-500 border border-dashed border-white/10 rounded-2xl">
+            Nenhum devedor encontrado no quadro.
+          </div>
+        ) : (
+
+          /* GRID RESPONSIVO DE CARDS */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {currentClients.map((client) => {
+              const totalDivida = client.contracts?.reduce(
+                (acc, contract) => acc + Number(contract.valorEmAberto || 0), 0
+              ) || 0;
+
+              const totalPhotos = client.images?.length ?? 0;
+
+              return (
+                <Card
+                  key={client.id}
+                  className="relative flex flex-col bg-gradient-to-br from-zinc-900/40 to-zinc-950/60 border border-white/5 hover:border-rose-500/30 transition-all duration-300 rounded-2xl overflow-hidden shadow-xl group hover:-translate-y-1 backdrop-blur-md hover:shadow-rose-500/5"
+                >
+                  <div className="h-[2px] w-full bg-rose-500 absolute top-0 left-0 opacity-30 group-hover:opacity-100 transition-opacity duration-300" />
+
+                  <CardContent className="p-6 flex-1 flex flex-col justify-between space-y-4">
+
+                    {/* VISUALIZAÇÃO COMPACTA DO PERFIL FIXO NO CARD */}
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-14 h-14 rounded-xl border border-white/5 overflow-hidden bg-zinc-800/50 flex items-center justify-center relative shrink-0 group-hover:scale-105 transition-transform duration-300">
+                            {client.images && client.images.length > 0 ? (
+                              <img
+                                src={client.images[0]}
+                                alt={client.nome}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <User className="w-6 h-6 text-zinc-400" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-white font-bold text-base truncate group-hover:text-zinc-200 transition-colors" title={client.nome}>
+                              {client.nome}
+                            </h3>
+                            <p className="text-[11px] font-mono text-zinc-500 mt-0.5">{formatCPF(client.cpf)}</p>
+                          </div>
+                        </div>
+
+                        <Badge variant="outline" className="px-2.5 py-0.5 rounded-lg text-[10px] tracking-wider uppercase font-black shrink-0 border bg-rose-500/10 text-rose-400 border-rose-500/30">
+                          Risco Crítico
+                        </Badge>
+                      </div>
+
+                      {/* Exibição rápida do saldo devedor consolidado */}
+                      <div className="bg-rose-500/[0.02] border border-rose-500/10 rounded-xl p-3 flex justify-between items-center">
+                        <span className="text-[11px] text-zinc-400 font-medium">Débito Consolidado:</span>
+                        <span className="text-base font-black font-mono text-rose-400">{formatCurrency(totalDivida)}</span>
+                      </div>
+
+                      {/* Informações estruturais de contato */}
+                      <div className="space-y-1.5 text-xs text-zinc-400">
+                        <div className="flex items-center gap-2 bg-zinc-950/40 p-2 rounded-xl border border-white/[0.02]">
+                          <Phone className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                          <span className="font-medium text-zinc-300">{formatTelefone(client.telefone)}</span>
+                        </div>
+
+                        {client.email && (
+                          <div className="flex items-center gap-2 bg-zinc-950/40 p-2 rounded-xl border border-white/[0.02] truncate">
+                            <Mail className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                            <span className="truncate text-zinc-300">{client.email}</span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 bg-zinc-950/40 p-2 rounded-xl border border-white/[0.02]">
+                          <Calendar className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                          <span className="text-zinc-300">
+                            Nascimento: {client.dataNascimento
+                              ? new Date(client.dataNascimento).toLocaleDateString("pt-BR")
+                              : "Não informado"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* BLOCO DE AÇÕES REESTRUTURADO */}
+                    <div className="pt-3 border-t border-white/[0.03] space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        {/* Ver Débitos */}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setSelectedDebtsClient(client)}
+                          className="text-xs gap-1.5 font-bold flex-1 h-9 rounded-xl transition-all bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border border-white/5"
+                        >
+                          <DollarSign className="w-3.5 h-3.5 text-zinc-400" /> Ver Débitos ({client.contracts?.length || 0})
+                        </Button>
+
+                        <div className="flex gap-1.5 shrink-0">
+                          {/* Ver Documentação Anexada */}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-emerald-400 hover:bg-emerald-500/10 border border-transparent hover:border-emerald-500/20 h-9 w-9 rounded-xl relative group transition-colors"
+                            onClick={() => handleOpenGallery(client)}
+                            title="Visualizar documentos anexados"
+                          >
+                            <Eye className="w-4 h-4" />
+                            {totalPhotos > 0 && (
+                              <span className="absolute -top-1 -right-1 bg-amber-500 text-zinc-950 text-[9px] font-black h-4 w-4 flex items-center justify-center rounded-full border-2 border-[#060913]">
+                                {totalPhotos}
+                              </span>
+                            )}
+                          </Button>
+
+                          {/* Gerenciar Dossiê Geral */}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-amber-500 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 h-9 w-9 rounded-xl transition-colors"
+                            onClick={() => {
+                              setContractsClientId(client.id);
+                              setContractsClientName(client.nome);
+                              setContractsOpen(true);
+                            }}
+                            title="Gerenciar Contratos"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* PASSANDO O PRIMEIRO CONTRATO VÁLIDO DIRETAMENTE DO LOOP */}
+                      {/* <Button
+                        size="sm"
+                        onClick={() => {
+                          if (client.contracts && client.contracts.length > 0) {
+                            handleOpenNegotiation(client.contracts[0]);
+                          } else {
+                            toast({ title: "Este cliente não possui contratos para negociar.", variant: "destructive" });
+                          }
+                        }}
+                        className="w-full text-xs gap-2 font-bold h-9 rounded-xl transition-all bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/10"
+                      >
+                        <Handshake className="w-4 h-4" /> Negociar Dívida
+                      </Button> */}
+                    </div>
+
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* CONTROLE DE PAGINAÇÃO */}
+        {!loading && filteredClients.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4 px-2 pt-2 border-t border-white/5">
+            <div className="text-xs text-zinc-500 order-2 sm:order-1 font-medium">
+              Mostrando <span className="text-zinc-300 font-bold">{startIndex + 1}</span>-
+              <span className="text-zinc-300 font-bold">
+                {Math.min(startIndex + itemsPerPage, filteredClients.length)}
+              </span> de <span className="text-zinc-300 font-bold">{filteredClients.length}</span> devedores em ficha.
+            </div>
+
+            <div className="flex items-center gap-4 order-1 sm:order-2 w-full sm:w-auto justify-between sm:justify-end">
               <Button
                 variant="outline"
-                size="icon"
-                className="bg-white/5 border-white/10 hover:bg-white/10"
-                onClick={loadCaloteiros}
-                disabled={loading}
+                size="sm"
+                className="border-white/5 bg-zinc-900/40 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-20 flex-1 sm:flex-none rounded-xl h-9 px-3 font-medium transition-all"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
+              </Button>
+
+              <span className="text-xs text-zinc-400 font-mono font-bold bg-zinc-950 border border-white/5 px-2.5 py-1 rounded-lg">
+                {currentPage} / {totalPages}
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-white/5 bg-zinc-900/40 text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-20 flex-1 sm:flex-none rounded-xl h-9 px-3 font-medium transition-all"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+              >
+                Próximo <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </div>
-
-          {/* GRID RESPONSIVO DE CARDS */}
-          {loading ? (
-            <div className="flex justify-center py-20">
-              <Loader2 className="animate-spin text-red-500 w-8 h-8" />
-            </div>
-          ) : currentClients.length === 0 ? (
-            <p className="text-center py-20 text-muted-foreground">Nenhum devedor encontrado no quadro.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {currentClients.map((client) => {
-                const viewDebts = !!showDebtsMap[client.id];
-                
-                // Calcula o montante acumulado dinamicamente no front-end
-                const totalDivida = client.contracts?.reduce(
-                  (acc, contract) => acc + Number(contract.valorEmAberto || 0), 0
-                ) || 0;
-
-                const totalPhotos = client.images?.length ?? 0;
-
-                return (
-                  <Card 
-                    key={client.id} 
-                    className="bg-zinc-900/90 border-zinc-850 hover:border-red-500/30 transition-all duration-350 flex flex-col justify-between overflow-hidden group shadow-lg"
-                  >
-                    {/* CONTEÚDO ROTATIVO DO CARD */}
-                    <div className="p-5 space-y-4">
-                      
-                      {!viewDebts ? (
-                        /* VISUALIZAÇÃO 1: PERFIL DO INADIMPLENTE */
-                        <div className="space-y-4 animate-fade-in">
-                          <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-full border border-zinc-700 overflow-hidden bg-zinc-800 flex items-center justify-center relative shrink-0">
-                              {client.images && client.images.length > 0 ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img 
-                                  src={client.images[0]} 
-                                  alt={client.nome} 
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <User className="w-6 h-6 text-zinc-600" />
-                              )}
-                            </div>
-                            <div className="overflow-hidden">
-                              <h3 className="text-white font-bold text-lg truncate italic group-hover:text-red-400 transition-colors">
-                                {client.nome}
-                              </h3>
-                              <p className="text-xs font-mono text-zinc-400 mt-0.5">{formatCPF(client.cpf)}</p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2 pt-2 border-t border-zinc-800/60 text-sm text-zinc-300">
-                            <div className="flex items-center gap-2">
-                              <Phone className="w-4 h-4 text-blue-400 shrink-0" />
-                              <span>{formatTelefone(client.telefone)}</span>
-                            </div>
-                            {client.email && (
-                              <div className="flex items-center gap-2 truncate">
-                                <Mail className="w-4 h-4 text-zinc-500 shrink-0" />
-                                <span className="truncate">{client.email}</span>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2">
-                              <Calendar className="w-4 h-4 text-purple-400 shrink-0" />
-                              <span>
-                                Nasc: {client.dataNascimento 
-                                  ? new Date(client.dataNascimento).toLocaleDateString("pt-BR") 
-                                  : "Não informado"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        /* VISUALIZAÇÃO 2: VALORES EM DÉBITO E DETALHES TÉCNICOS */
-                        <div className="space-y-3 animate-fade-in max-h-[190px] overflow-y-auto pr-1">
-                          <div className="bg-red-950/30 border border-red-900/40 rounded-lg p-3 text-center">
-                            <p className="text-zinc-400 text-[10px] uppercase font-semibold tracking-wider">Total em Débito</p>
-                            <p className="text-2xl font-bold text-red-500 font-mono mt-0.5">
-                              {formatCurrency(totalDivida)}
-                            </p>
-                          </div>
-
-                          {/* REPETIDOR DE CONTRATOS COBRADOS */}
-                          <div className="space-y-2">
-                            {client.contracts && client.contracts.length > 0 ? (
-                              client.contracts.map((contract: any) => (
-                                <div key={contract.id} className="bg-zinc-950/60 border border-zinc-800 p-2.5 rounded text-xs space-y-1">
-                                  <div className="flex justify-between font-medium">
-                                    <span className="text-zinc-500 flex items-center gap-1">
-                                      <FileText className="w-3 h-3 text-zinc-500" /> Contrato
-                                    </span>
-                                    <span className="text-red-400 font-mono font-semibold">
-                                      {formatCurrency(contract.valorEmAberto)}
-                                    </span>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-1 text-[11px] text-zinc-500 pt-1 border-t border-zinc-900">
-                                    <span className="flex items-center gap-1">
-                                      <Clock className="w-2.5 h-2.5 text-zinc-400" /> {translatePeriodicity(contract.periodicity)}
-                                    </span>
-                                    <span className="flex items-center gap-1 justify-end">
-                                      <Percent className="w-2.5 h-2.5 text-zinc-400" /> Juros: {Number(contract.jurosPercent)}%
-                                    </span>
-                                  </div>
-                                  <p className="text-[10px] text-zinc-600 font-mono text-right">
-                                    Venc: {new Date(contract.vencimentoEm).toLocaleDateString("pt-BR")}
-                                  </p>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="text-xs text-zinc-500 text-center py-2">Sem contratos de calote.</p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* BOTÕES DE INTERAÇÃO DO CARD */}
-                    <div className="bg-zinc-950/40 p-4 border-t border-zinc-850 flex items-center justify-between gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => toggleCardView(client.id)}
-                        className={`text-xs gap-1.5 font-medium flex-1 transition-all ${
-                          viewDebts 
-                            ? "bg-zinc-800 hover:bg-zinc-700 text-zinc-200" 
-                            : "bg-red-600/10 border border-red-500/20 hover:bg-red-600/20 text-red-400"
-                        }`}
-                      >
-                        {viewDebts ? (
-                          <>
-                            <User className="w-3.5 h-3.5" /> Ver Cadastro
-                          </>
-                        ) : (
-                          <>
-                            <DollarSign className="w-3.5 h-3.5" /> Ver Débitos ({client.contracts?.length || 0})
-                          </>
-                        )}
-                      </Button>
-
-                      <div className="flex gap-1">
-                        {/* Ação: Provas/Anexos */}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-emerald-400 hover:bg-emerald-400/10 h-8 w-8 relative group"
-                          onClick={() => handleOpenGallery(client)}
-                          title="Visualizar documentos anexados"
-                        >
-                          <Eye className="w-4 h-4" />
-                          {totalPhotos > 0 && (
-                            <span className="absolute -top-1 -right-1 bg-yellow-500 text-zinc-950 text-[9px] font-bold h-3.5 w-3.5 flex items-center justify-center rounded-full border border-zinc-950">
-                              {totalPhotos}
-                            </span>
-                          )}
-                        </Button>
-
-                        {/* Ação: Abrir Janela Geral de Contratos */}
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-yellow-500 hover:bg-yellow-400/10 h-8 w-8"
-                          onClick={() => {
-                            setContractsClientId(client.id);
-                            setContractsClientName(client.nome);
-                            setContractsOpen(true);
-                          }}
-                          title="Gerenciar Contratos"
-                        >
-                          <FileText className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          {/* CONTROLE DE PAGINAÇÃO DA PÁGINA */}
-          {!loading && filteredClients.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4 px-2">
-              <div className="text-sm text-muted-foreground order-2 sm:order-1">
-                Mostrando <span className="text-white font-medium">{startIndex + 1}</span>-
-                <span className="text-white font-medium">
-                  {Math.min(startIndex + itemsPerPage, filteredClients.length)}
-                </span> de <span className="text-white font-medium">{filteredClients.length}</span> devedores
-              </div>
-
-              <div className="flex items-center gap-2 order-1 sm:order-2 w-full sm:w-auto justify-between">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-white/5 border-white/10 text-white disabled:opacity-30 flex-1 sm:flex-none"
-                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">Anterior</span>
-                </Button>
-
-                <span className="text-xs text-white/70 px-2 font-mono">
-                  {currentPage} / {totalPages}
-                </span>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-white/5 border-white/10 text-white disabled:opacity-30 flex-1 sm:flex-none"
-                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
-                  <span className="hidden sm:inline">Próximo</span> <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </Card>
+        )}
       </div>
+
+      {/* MODAL: DETALHAMENTO DE DÉBITOS DO DEVEDOR */}
+      <Dialog open={selectedDebtsClient !== null} onOpenChange={(open) => !open && setSelectedDebtsClient(null)}>
+        {selectedDebtsClient && (() => {
+          const totalDivida = selectedDebtsClient.contracts?.reduce(
+            (acc, contract) => acc + Number(contract.valorEmAberto || 0), 0
+          ) || 0;
+
+          return (
+            <DialogContent className="bg-zinc-950 border border-white/10 text-white max-w-xl rounded-2xl p-6 backdrop-blur-lg max-h-[85vh] overflow-y-auto">
+              <DialogHeader className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Badge variant="outline" className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase border bg-rose-500/10 text-rose-400 border-rose-500/20">
+                    Inadimplência Crítica
+                  </Badge>
+                  <span className="text-xs text-zinc-500 font-mono">CPF: {formatCPF(selectedDebtsClient.cpf)}</span>
+                </div>
+                <DialogTitle className="text-2xl font-black text-white tracking-tight">
+                  Débitos de {selectedDebtsClient.nome}
+                </DialogTitle>
+                <DialogDescription className="text-zinc-400 text-xs">
+                  Quebra analítica de valores vencidos e pendentes atrelados a este cadastro devedor.
+                </DialogDescription>
+              </DialogHeader>
+
+              <hr className="border-white/5 my-3" />
+
+              <div className="space-y-5">
+                {/* Indicador Consolidado de Dívida */}
+                <div className="bg-zinc-900/40 border border-white/5 p-4 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Total Acumulado em Débito</span>
+                    <div className="text-3xl font-black font-mono text-rose-500 mt-0.5">
+                      {formatCurrency(totalDivida)}
+                    </div>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                    <DollarSign className="w-6 h-6" />
+                  </div>
+                </div>
+
+                {/* Lista de Contratos em Aberto */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-zinc-500" /> Contratos Cobrados ({selectedDebtsClient.contracts?.length || 0})
+                  </h4>
+
+                  <div className="space-y-2.5 max-h-[250px] overflow-y-auto pr-1">
+                    {selectedDebtsClient.contracts && selectedDebtsClient.contracts.length > 0 ? (
+                      selectedDebtsClient.contracts.map((contract: any) => (
+                        <div key={contract.id} className="bg-zinc-900/30 border border-white/5 p-3 rounded-xl space-y-2 text-xs">
+                          <div className="flex justify-between font-medium">
+                            <span className="text-zinc-400 flex items-center gap-1.5 font-mono text-[11px]">
+                              <FileText className="w-3.5 h-3.5 text-zinc-600" /> ID Contrato: ...{contract.id.slice(-6)}
+                            </span>
+                            <span className="text-rose-400 font-mono font-bold">
+                              {formatCurrency(contract.valorEmAberto)}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-[11px] text-zinc-400 pt-1.5 border-t border-white/[0.03]">
+                            <span className="flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-zinc-500" /> Periodicidade: <span className="text-zinc-200">{translatePeriodicity(contract.periodicity)}</span>
+                            </span>
+                            <span className="flex items-center gap-1.5 justify-end">
+                              <Percent className="w-3 h-3 text-zinc-500" /> Taxa Juros: <span className="text-zinc-200">{Number(contract.jurosPercent)}%</span>
+                            </span>
+                          </div>
+
+                          <p className="text-[10px] text-zinc-500 text-right font-mono font-medium">
+                            Vencimento original: {new Date(contract.vencimentoEm).toLocaleDateString("pt-BR")}
+                          </p>
+
+                          {/* SEGUNDO TRIGGER DE NEGOCIAÇÃO DENTRO DA ANÁLISE DE CADA CONTRATO DO MODAL */}
+                          {/* <Button
+                            size="sm"
+                            onClick={() => {
+                              setSelectedDebtsClient(null);
+                              handleOpenNegotiation(contract);
+                            }}
+                            className="w-full mt-2 bg-zinc-800 border border-white/5 hover:bg-rose-600 hover:text-white transition-colors rounded-xl text-[11px] font-bold h-7 gap-1"
+                          >
+                            <Handshake className="w-3 h-3" /> Negociar Este Contrato
+                          </Button> */}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-zinc-500 text-center py-6 border border-dashed border-white/5 rounded-xl">
+                        Nenhum contrato marcado como calote ativo.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-2">
+                {/* <Button
+                  onClick={() => {
+                    if (selectedDebtsClient.contracts && selectedDebtsClient.contracts.length > 0) {
+                      const contractToNegotiate = selectedDebtsClient.contracts[0];
+                      setSelectedDebtsClient(null);
+                      handleOpenNegotiation(contractToNegotiate);
+                    } else {
+                      toast({ title: "Este cliente não possui contratos para negociar.", variant: "destructive" });
+                    }
+                  }}
+                  className="w-full bg-rose-500 hover:bg-rose-600 text-white rounded-xl h-10 font-bold gap-2"
+                >
+                  <Handshake className="w-4 h-4" /> Iniciar Acordo Agora
+                </Button> */}
+                <Button
+                  onClick={() => setSelectedDebtsClient(null)}
+                  variant="outline"
+                  className="w-full bg-transparent hover:bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white rounded-xl h-10 font-medium"
+                >
+                  Fechar Janela de Débito
+                </Button>
+              </div>
+            </DialogContent>
+          );
+        })()}
+      </Dialog>
 
       {/* MODAL EXTERNO: GERENCIADOR COMPLETO DE CONTRATOS DO CLIENTE */}
       <ClientContractsModal
@@ -430,44 +538,63 @@ export default function QuadroCaloteiros() {
         onClose={() => setContractsOpen(false)}
       />
 
+      {/* MONTAGEM INLINE DO SEU MODAL DE ACORDO ATUALIZADO */}
+      <CreateNegotiationModal
+        open={negotiationOpen}
+        onClose={() => setNegotiationOpen(false)}
+        contract={selectedContractForNegotiation}
+        onCreated={() => loadCaloteiros()}
+      />
+
       {/* DIALOG DE VISUALIZAÇÃO DE COMPROVANTES/DOCUMENTOS */}
       <Dialog open={galleryOpen} onOpenChange={setGalleryOpen}>
-        <DialogContent className="bg-zinc-950 border-zinc-850 text-white max-w-3xl overflow-y-auto max-h-[85vh]">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2 border-b border-white/5 pb-3">
-              <ImageIcon className="w-5 h-5 text-red-500" /> Documentação e Mídias de {selectedClientName}
+        <DialogContent className="bg-zinc-950 border border-white/10 text-white max-w-2xl rounded-2xl p-6 backdrop-blur-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="text-xl font-black text-white tracking-tight flex items-center gap-2 pb-2 border-b border-white/5">
+              <ImageIcon className="w-5 h-5 text-rose-500" /> Documentação de Anexo
             </DialogTitle>
+            <p className="text-zinc-400 text-xs">
+              Mídias anexadas e provas vinculadas à inadimplência do devedor <span className="text-zinc-200 font-bold">{selectedClientName}</span>.
+            </p>
           </DialogHeader>
 
           {selectedClientPhotos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground gap-2">
-              <ImageIcon className="w-12 h-12 opacity-10" />
-              <p className="text-sm">Nenhum documento anexado a este devedor.</p>
+            <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-600 gap-2 border border-dashed border-white/5 rounded-xl mt-4">
+              <ImageIcon className="w-10 h-10 opacity-20" />
+              <p className="text-xs font-medium">Nenhuma evidência documental ou contrato escaneado anexado.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4">
               {selectedClientPhotos.map((url, index) => (
                 <div
                   key={index}
-                  className="group relative aspect-square rounded-lg border border-white/10 overflow-hidden bg-zinc-900 cursor-pointer hover:border-red-500 transition-all shadow-md"
+                  className="group relative aspect-square rounded-xl border border-white/5 overflow-hidden bg-zinc-900/40 cursor-pointer hover:border-rose-500 transition-all shadow-md"
                   onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
                   title="Clique para expandir mídia"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={url}
                     alt={`Anexo ${index + 1}`}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <span className="text-xs bg-zinc-950/80 px-2 py-1 rounded text-white font-medium flex items-center gap-1">
-                      <Eye className="w-3 h-3" /> Abrir Original
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200">
+                    <span className="text-[11px] bg-zinc-950/90 border border-white/10 px-2.5 py-1 rounded-xl text-white font-bold flex items-center gap-1">
+                      <Eye className="w-3 h-3 text-zinc-300" /> Expandir Original
                     </span>
                   </div>
                 </div>
               ))}
             </div>
           )}
+
+          <div className="mt-6">
+            <Button
+              onClick={() => setGalleryOpen(false)}
+              className="w-full bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 rounded-xl"
+            >
+              Fechar Mídias
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

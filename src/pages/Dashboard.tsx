@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isBefore, startOfDay, isToday } from "date-fns";
 import { 
@@ -70,6 +70,7 @@ import { Button } from "@/components/ui/button";
 import { createFinanceExpense } from "@/services/finance";
 import { toast } from "@/hooks/use-toast";
 import { useDateRange } from "@/hooks/useDateRange";
+import { authService } from "@/lib/auth"; // 🔴 Importação do seu serviço de autenticação para ler o plano
 
 // Componente de Tooltip Customizado e Unificado para evitar textos pretos em fundos escuros
 const CustomChartTooltip = ({ active, payload, label }: any) => {
@@ -97,6 +98,19 @@ const Dashboard = () => {
   const { range, setRange } = useDateRange();
   const [isExpenseSheetOpen, setIsExpenseSheetOpen] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
+  
+  // 🔴 Estado para armazenar o plano atual do usuário autenticado
+  const [userPlan, setUserPlan] = useState<"VAZIO" | "STARTER" | "PRO">("VAZIO");
+
+  useEffect(() => {
+    const user = authService.getUserData();
+    if (user && user.plan) {
+      setUserPlan(user.plan);
+    }
+  }, []);
+
+  // Define se deve exibir os recursos avançados/restritos (Apenas se o plano for PRO)
+  const isProPlan = userPlan === "PRO";
 
   // Query do Resumo Geral
   const { data, isLoading } = useQuery({
@@ -114,6 +128,7 @@ const Dashboard = () => {
     queryKey: ["balance"],
     queryFn: getBalance,
     refetchOnWindowFocus: true,
+    enabled: isProPlan, // 🔴 Só executa a requisição se o plano for PRO para poupar processamento
   });
 
   const saveExpenseMutation = useMutation({
@@ -145,7 +160,7 @@ const Dashboard = () => {
 
   // Cálculo da quantidade de contratos em atraso (length)
   const qtdContratosAtrasados = useMemo(() => {
-    if (!data?.recentContracts || data.recentContracts.length === 0) return 3; // Valor fictício caso a lista esteja vazia
+    if (!data?.recentContracts || data.recentContracts.length === 0) return 3;
     return data.recentContracts.filter((c: DashboardRecentContract) => {
       const venc = new Date(c.vencimentoEm);
       return isBefore(venc, startOfDay(new Date())) && c.status !== "QUITADO";
@@ -166,7 +181,6 @@ const Dashboard = () => {
 
   const pieChartData = useMemo(() => {
     if (!data?.recentContracts || data.recentContracts.length === 0) {
-      // Fallback estético com valores mockados caso venha vazio do banco
       return [
         { name: "Diário", value: 1000, color: "#10b981" },
         { name: "Semanal", value: 1000, color: "#f59e0b" },
@@ -218,7 +232,6 @@ const Dashboard = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-[#111622] border border-[#161b26] text-white w-52 rounded-lg shadow-2xl p-1.5 z-50">
-                
                 <DropdownMenuItem asChild className="focus:bg-[#1c2336] focus:text-white cursor-pointer rounded-md mb-0.5">
                   <NewContractSheet 
                     triggerLabel="Novo Empréstimo" 
@@ -257,7 +270,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* SUMMARY CARDS GRID */}
+        {/* SUMMARY CARDS GRID (Sempre Visível) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <FinanceSummaryCard type="TOTAL_EMPRESTADO" value={data.totalEmprestado} subInfo={data.subTotalEmprestado} />
           <FinanceSummaryCard type="JUROS_A_RECEBER" value={data.jurosETaxasAReceber} subInfo={data.subJurosAReceber} />
@@ -265,111 +278,114 @@ const Dashboard = () => {
           <FinanceSummaryCard type="TOTAL_RECEBIDO" value={data.totalRecebido} subInfo={data.subTotalRecebido} />
         </div>
 
-        {/* LINHA SUPERIOR: LINE CHART + CAIXA & ATRASADOS */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* GRÁFICO DE LINHA (2/3) */}
-          <Card className="lg:col-span-2 p-6 bg-card/50 backdrop-blur-sm border-white/5 shadow-xl rounded-xl flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-white/5 rounded-lg">
-                  <Activity className="w-4 h-4 text-emerald-400" />
-                </div>
-                <div>
-                  <h2 className="text-md font-bold text-white tracking-tight">Evolução do Fluxo Financeiro</h2>
-                  <p className="text-[11px] text-zinc-400">Comparativo volumétrico de capital alocado vs. projeção de retorno</p>
-                </div>
-              </div>
-            </div>
-            <div className="h-64 w-full pt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={lineChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorEmprestado" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorJuros" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="name" stroke="#4b5563" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#4b5563" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$ ${v}`} />
-                  <Tooltip content={<CustomChartTooltip />} />
-                  <Area type="monotone" dataKey="Emprestado" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorEmprestado)" name="Total Emprestado" />
-                  <Area type="monotone" dataKey="Juros" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorJuros)" name="Juros Recebidos" />
-                  <Legend verticalAlign="top" height={36} iconSize={8} wrapperStyle={{ fontSize: '11px', paddingBottom: '10px' }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          {/* COLUNA LATERAL DA LINHA SUPERIOR: CAIXA + ATRASADOS (1/3) */}
-          <div className="lg:col-span-1 flex flex-col gap-4">
+        {/* 🔴 CONDICIONAL COMPLETA: LINHA DO GRÁFICO DE LINHA + CAIXA & ATRASADOS (SÓ APARECE SE FOR PRO) */}
+        {isProPlan && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* CARD DO CAIXA OPERACIONAL */}
-            <Card className="relative overflow-hidden p-6 border-white/5 bg-card/50 backdrop-blur-xl shadow-2xl group flex-1 flex flex-col justify-center min-h-[140px]">
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all duration-500" />
-              <div className="relative z-10 w-full">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 w-fit">
-                    <Wallet className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Caixa Operacional</span>
+            {/* GRÁFICO DE LINHA */}
+            <Card className="lg:col-span-2 p-6 bg-card/50 backdrop-blur-sm border-white/5 shadow-xl rounded-xl flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-white/5 rounded-lg">
+                    <Activity className="w-4 h-4 text-emerald-400" />
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/10"
-                    onClick={() => setShowBalance(!showBalance)}
-                  >
-                    {showBalance ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                  </Button>
+                  <div>
+                    <h2 className="text-md font-bold text-white tracking-tight">Evolução do Fluxo Financeiro</h2>
+                    <p className="text-[11px] text-zinc-400">Comparativo volumétrico de capital alocado vs. projeção de retorno</p>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  {isLoadingBalance ? (
-                    <div className="h-10 w-32 bg-white/10 animate-pulse rounded" />
-                  ) : (
+              </div>
+              <div className="h-64 w-full pt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={lineChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorEmprestado" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorJuros" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="name" stroke="#4b5563" fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#4b5563" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R$ ${v}`} />
+                    <Tooltip content={<CustomChartTooltip />} />
+                    <Area type="monotone" dataKey="Emprestado" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorEmprestado)" name="Total Emprestado" />
+                    <Area type="monotone" dataKey="Juros" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorJuros)" name="Juros Recebidos" />
+                    <Legend verticalAlign="top" height={36} iconSize={8} wrapperStyle={{ fontSize: '11px', paddingBottom: '10px' }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            {/* COLUNA LATERAL DA LINHA SUPERIOR: CAIXA + ATRASADOS */}
+            <div className="lg:col-span-1 flex flex-col gap-4">
+              
+              {/* CARD DO CAIXA OPERACIONAL */}
+              <Card className="relative overflow-hidden p-6 border-white/5 bg-card/50 backdrop-blur-xl shadow-2xl group flex-1 flex flex-col justify-center min-h-[140px]">
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all duration-500" />
+                <div className="relative z-10 w-full">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 w-fit">
+                      <Wallet className="w-4 h-4" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Caixa Operacional</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/10"
+                      onClick={() => setShowBalance(!showBalance)}
+                    >
+                      {showBalance ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <div className="space-y-1">
+                    {isLoadingBalance ? (
+                      <div className="h-10 w-32 bg-white/10 animate-pulse rounded" />
+                    ) : (
+                      <h3 className="text-4xl font-extrabold text-white tracking-tighter">
+                        {showBalance ? formatCurrency(balanceData?.saldo || 0) : "R$ ••••••••"}
+                      </h3>
+                    )}
+                    <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                      <TrendingUp className="w-3 h-3 text-emerald-500" /> Disponível para novos aportes
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* CARD: CONTRATOS ATRASADOS */}
+              <Card className="relative overflow-hidden p-6 border-white/5 bg-card/50 backdrop-blur-xl shadow-2xl group flex-1 flex flex-col justify-center min-h-[140px]">
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-rose-500/5 rounded-full blur-3xl group-hover:bg-rose-500/10 transition-all duration-500" />
+                <div className="relative z-10 w-full">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-2 text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20 w-fit">
+                      <AlertTriangle className="w-4 h-4 text-rose-400" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Contratos Atrasados</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
                     <h3 className="text-4xl font-extrabold text-white tracking-tighter">
-                      {showBalance ? formatCurrency(balanceData?.saldo || 0) : "R$ ••••••••"}
+                      {qtdContratosAtrasados} <span className="text-lg font-normal text-zinc-400">contratos</span>
                     </h3>
-                  )}
-                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3 text-emerald-500" /> Disponível para novos aportes
-                  </p>
-                </div>
-              </div>
-            </Card>
-
-            {/* CARD: CONTRATOS ATRASADOS (MOCK QUANTIDADE / CORAL STYLE) */}
-            <Card className="relative overflow-hidden p-6 border-white/5 bg-card/50 backdrop-blur-xl shadow-2xl group flex-1 flex flex-col justify-center min-h-[140px]">
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-rose-500/5 rounded-full blur-3xl group-hover:bg-rose-500/10 transition-all duration-500" />
-              <div className="relative z-10 w-full">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-2 text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20 w-fit">
-                    <AlertTriangle className="w-4 h-4 text-rose-400" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Contratos Atrasados</span>
+                    <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                      Inadimplência líquida aguardando quitação
+                    </p>
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <h3 className="text-4xl font-extrabold text-white tracking-tighter">
-                    {qtdContratosAtrasados} <span className="text-lg font-normal text-zinc-400">contratos</span>
-                  </h3>
-                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    Inadimplência líquida aguardando quitação
-                  </p>
-                </div>
-              </div>
-            </Card>
+              </Card>
 
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* LINHA INFERIOR: PRÓXIMOS VENCIMENTOS + PIE CHART */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* LINHA INFERIOR COMPARTILHADA / ADAPTADA */}
+        {/* 🔴 Se for PRO, renderiza em Grid de 3 colunas (Tabela + Pizza). Se for STARTER/VAZIO, renderiza apenas a tabela ocupando 100% da largura. */}
+        <div className={isProPlan ? "grid grid-cols-1 lg:grid-cols-3 gap-6 items-start" : "w-full"}>
 
-          {/* TABLE: PRÓXIMOS VENCIMENTOS (2/3) */}
-          <Card className="lg:col-span-2 p-6 bg-card/50 backdrop-blur-sm border-white/5 shadow-xl rounded-xl overflow-hidden">
+          {/* TABLE: PRÓXIMOS VENCIMENTOS (Sempre Visível) */}
+          <Card className={`${isProPlan ? "lg:col-span-2" : "w-full"} p-6 bg-card/50 backdrop-blur-sm border-white/5 shadow-xl rounded-xl overflow-hidden`}>
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-white/5 rounded-lg">
                 <Clock className="w-4 h-4 text-amber-500" />
@@ -449,55 +465,57 @@ const Dashboard = () => {
             </div>
           </Card>
 
-          {/* GRÁFICO DE PIZZA / ALOCAÇÃO COM FIXO ALTURA FIXA E CORREÇÃO DO TOOLTIP (1/3) */}
-          <Card className="lg:col-span-1 p-5 bg-card/50 backdrop-blur-sm border-white/5 shadow-xl rounded-xl h-[420px] flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="p-1.5 bg-white/5 rounded-md">
-                  <PieIcon className="w-3.5 h-3.5 text-blue-400" />
-                </div>
-                <h2 className="text-xs font-bold text-white tracking-tight">Divisão por Alocação</h2>
-              </div>
-              <p className="text-[10px] text-zinc-400">Distribuição proporcional por periodicidade</p>
-            </div>
-            
-            <div className="h-56 w-full relative flex items-center justify-center my-auto">
-              {pieChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieChartData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={75}
-                      paddingAngle={6}
-                      cornerRadius={4}
-                      dataKey="value"
-                    >
-                      {pieChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<CustomChartTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <span className="text-xs text-zinc-500">Sem dados no período</span>
-              )}
-            </div>
-
-            <div className="pt-2 border-t border-white/5">
-              <div className="flex justify-center gap-4 flex-wrap text-[10px] text-zinc-400">
-                {pieChartData.map((entry, index) => (
-                  <div key={index} className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                    <span>{entry.name}</span>
+          {/* 🔴 GRÁFICO DE PIZZA / ALOCAÇÃO (SÓ APARECE SE FOR PRO) */}
+          {isProPlan && (
+            <Card className="lg:col-span-1 p-5 bg-card/50 backdrop-blur-sm border-white/5 shadow-xl rounded-xl h-[420px] flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-1.5 bg-white/5 rounded-md">
+                    <PieIcon className="w-3.5 h-3.5 text-blue-400" />
                   </div>
-                ))}
+                  <h2 className="text-xs font-bold text-white tracking-tight">Divisão por Alocação</h2>
+                </div>
+                <p className="text-[10px] text-zinc-400">Distribuição proporcional por periodicidade</p>
               </div>
-            </div>
-          </Card>
+              
+              <div className="h-56 w-full relative flex items-center justify-center my-auto">
+                {pieChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieChartData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={75}
+                        paddingAngle={6}
+                        cornerRadius={4}
+                        dataKey="value"
+                      >
+                        {pieChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <span className="text-xs text-zinc-500">Sem dados no período</span>
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-white/5">
+                <div className="flex justify-center gap-4 flex-wrap text-[10px] text-zinc-400">
+                  {pieChartData.map((entry, index) => (
+                    <div key={index} className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                      <span>{entry.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          )}
 
         </div>
       </div>

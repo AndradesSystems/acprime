@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, memo } from "react";
+import React, { useState, memo, useEffect } from "react";
 import {
   Search,
   FileText,
@@ -13,7 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreVertical,
-  AlertTriangle, // 🔴 Importado para identificar a funcionalidade de caloteiro
+  AlertTriangle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -45,7 +45,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Contract } from "@/services/contracts";
-import { CaloteiroAction } from "@/services/clients"; // Importado do service de clientes criado anteriormente
+import { CaloteiroAction } from "@/services/clients";
 
 interface ContractsTableProps {
   searchTerm: string;
@@ -60,8 +60,8 @@ interface ContractsTableProps {
   onSelectContract: (c: Contract) => void;
   onHistoryContract: (c: Contract) => void;
   onDueDateContract: (c: Contract) => void;
-  onToggleCaloteiro?: (contractId: string, acao: CaloteiroAction) => void; // 🔴 Nova ação adicionada à interface
-  isUpdatingCaloteiro?: string | null; // ID do contrato atualmente sofrendo mutação de caloteiro
+  onToggleCaloteiro?: (contractId: string, acao: CaloteiroAction) => void;
+  isUpdatingCaloteiro?: string | null;
   formatCurrency: (v: number | string) => string;
   formatDate: (d: string) => string;
   getBadge: (type: string) => { label: string; className: string };
@@ -90,6 +90,24 @@ const ContractsTable = memo(
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
+    // 🟢 NOVO ESTADO: Controla se as funcionalidades liberadas (Starter/Pro) devem aparecer
+    const [hasFeatureAccess, setHasFeatureAccess] = useState<boolean>(false);
+
+    // 🟢 VALIDAÇÃO DE PLANO: Roda apenas no lado do cliente com segurança
+    useEffect(() => {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        try {
+          const userObj = JSON.parse(storedUser);
+          if (userObj && (userObj.plan === "STARTER" || userObj.plan === "PRO")) {
+            setHasFeatureAccess(true);
+          }
+        } catch (e) {
+          console.error("Erro ao converter objeto de usuário do localStorage", e);
+        }
+      }
+    }, []);
+
     const totalPages = Math.ceil(contracts.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const currentItems = contracts.slice(startIndex, startIndex + itemsPerPage);
@@ -98,7 +116,7 @@ const ContractsTable = memo(
       setCurrentPage(newPage);
     };
 
-    React.useEffect(() => {
+    useEffect(() => {
       setCurrentPage(1);
     }, [searchTerm, statusFilter]);
 
@@ -128,7 +146,7 @@ const ContractsTable = memo(
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="ABERTO">Aberto</SelectItem>
                 <SelectItem value="ATRASADO">Atrasado</SelectItem>
-                <SelectItem value="CALOTEIRO">Caloteiro</SelectItem> {/* 🔴 Adicionado opção de filtro */}
+                <SelectItem value="CALOTEIRO">Caloteiro</SelectItem>
                 <SelectItem value="COBRANCA_PESSOAL">Cobrança</SelectItem>
               </SelectContent>
             </Select>
@@ -159,6 +177,7 @@ const ContractsTable = memo(
                 <DesktopRow
                   key={c.id}
                   c={c}
+                  hasFeatureAccess={hasFeatureAccess}
                   {...{ getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }}
                 />
               ))}
@@ -177,6 +196,7 @@ const ContractsTable = memo(
               <MobileCard
                 key={c.id}
                 c={c}
+                hasFeatureAccess={hasFeatureAccess}
                 {...{ getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }}
               />
             ))
@@ -225,9 +245,9 @@ const ContractsTable = memo(
   },
 );
 
-/* COMPONENTS AUXILIARES PARA LIMPEZA DE CÓDIGO */
+/* COMPONENTS AUXILIARES */
 
-const DesktopRow = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }: any) => {
+const DesktopRow = ({ c, hasFeatureAccess, getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }: any) => {
   const badge = getBadge(c.periodicity);
   return (
     <TableRow className="border-white/5 hover:bg-white/5 transition-colors">
@@ -256,13 +276,13 @@ const DesktopRow = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract
         </button>
       </TableCell>
       <TableCell className="text-right">
-        <ActionButtons c={c} {...{ onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }} />
+        <ActionButtons c={c} hasFeatureAccess={hasFeatureAccess} {...{ onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }} />
       </TableCell>
     </TableRow>
   );
 };
 
-const MobileCard = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }: any) => {
+const MobileCard = ({ c, hasFeatureAccess, getBadge, formatCurrency, formatDate, onDueDateContract, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }: any) => {
   const badge = getBadge(c.periodicity);
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3">
@@ -295,13 +315,13 @@ const MobileCard = ({ c, getBadge, formatCurrency, formatDate, onDueDateContract
           <span className="text-gray-400">Juros: {c.jurosPercent}%</span>
           {Number(c.taxa) > 0 && <span className="text-red-400">Taxa: {formatCurrency(c.taxa)}</span>}
         </div>
-        <ActionButtons c={c} {...{ onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }} />
+        <ActionButtons c={c} hasFeatureAccess={hasFeatureAccess} {...{ onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }} />
       </div>
     </div>
   );
 };
 
-const ActionButtons = ({ c, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }: any) => {
+const ActionButtons = ({ c, hasFeatureAccess, onNotify, isNotifying, onHistoryContract, onSelectContract, onDelete, onToggleCaloteiro, isUpdatingCaloteiro }: any) => {
   const isCaloteiro = c.status === "CALOTEIRO";
   const loadingCaloteiro = isUpdatingCaloteiro === c.id;
 
@@ -315,8 +335,8 @@ const ActionButtons = ({ c, onNotify, isNotifying, onHistoryContract, onSelectCo
   return (
     <div className="flex items-center justify-end gap-1">
       
-      {/* 🔴 NOVO BOTÃO: ALTERNAR QUADRO DE CALOTEIROS */}
-      {onToggleCaloteiro && (
+      {/* 🟢 CONDICIONAL DE PLANO (CALOTEIRO): Exibe apenas se onToggleCaloteiro existir E o usuário for STARTER ou PRO */}
+      {onToggleCaloteiro && hasFeatureAccess && (
         <Button
           variant="ghost"
           size="icon"
@@ -337,7 +357,10 @@ const ActionButtons = ({ c, onNotify, isNotifying, onHistoryContract, onSelectCo
         </Button>
       )}
 
-      <NavbarNotificationWrapper c={c} {...{ onNotify, isNotifying }} />
+      {/* 🟢 CONDICIONAL DE PLANO (MENSAGEM MANUAL): Só renderiza o wrapper se for STARTER ou PRO */}
+      {hasFeatureAccess && (
+        <NavbarNotificationWrapper c={c} {...{ onNotify, isNotifying }} />
+      )}
 
       <Button variant="ghost" size="icon" className="h-8 w-8 text-gold" disabled={c.status === "QUITADO"} onClick={() => onSelectContract(c)}>
         <CreditCard className="w-4 h-4" />
@@ -359,7 +382,6 @@ const ActionButtons = ({ c, onNotify, isNotifying, onHistoryContract, onSelectCo
   );
 };
 
-/* Separador auxiliar para manter o AlertDialog isolado */
 const NavbarNotificationWrapper = ({ c, onNotify, isNotifying }: any) => (
   <AlertDialog>
     <AlertDialogTrigger asChild>

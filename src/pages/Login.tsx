@@ -163,7 +163,7 @@ const AuthPage = () => {
         </div>
 
         <div className="relative z-10">
-          <p className="text-xs text-zinc-500">© 2026 Andrade Financeira. Todos os direitos reservados.</p>
+          <p className="text-xs text-zinc-500">© 2026 Todos os direitos reservados.</p>
         </div>
       </div>
 

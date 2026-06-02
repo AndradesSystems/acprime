@@ -4,7 +4,6 @@ import { api } from "./api";
     MODELS
 ======================= */
 
-// Atualizado para bater com o Enum UserStatus do Prisma
 export type SubscriberStatus = "ATIVO" | "BLOQUEADO";
 
 export interface Subscriber {
@@ -12,16 +11,14 @@ export interface Subscriber {
   nome: string;
   cpf: string;
   email: string;
+  plan: "VAZIO" | "STARTER" | "PRO";
   tipo: "ASSINANTE" | "ADMIN" | "OPERADOR";
-  status: SubscriberStatus; // Adicionado: Campo real do banco agora
+  status: SubscriberStatus; 
   vencimento: string | null; 
   createdAt: string;
   updatedAt: string;
 }
 
-/**
- * Payload usado para criação pelo Admin
- */
 export type SubscriberInput = {
   nome: string;
   cpf: string;
@@ -30,22 +27,17 @@ export type SubscriberInput = {
   diasValidade?: number;
 };
 
-/**
- * Payload usado para atualizar perfil ou dados pelo Admin
- */
 export type SubscriberUpdateInput = {
   nome?: string;
   email?: string;
   senha?: string;
   cpf?: string;
-  vencimento?: string;
+  vencimento?: string; // String ISO esperada pelo backend
   diasValidade?: number;
-  status?: SubscriberStatus; // Adicionado para permitir Pausar/Bloquear
+  plan?: "VAZIO" | "STARTER" | "PRO"; // 🌟 Corrigido: Agora é opcional
+  status?: SubscriberStatus; 
 };
 
-/**
- * Payload para alteração de senha
- */
 export type ChangePasswordInput = {
   senhaAntiga: string;
   novaSenha: string;
@@ -55,17 +47,11 @@ export type ChangePasswordInput = {
     API CALLS (ADMIN)
 ======================= */
 
-/**
- * Lista todos os assinantes (Painel Admin)
- */
 export const getSubscribers = async (): Promise<Subscriber[]> => {
   const { data } = await api.get<Subscriber[]>("/users/assinantes");
   return data;
 };
 
-/**
- * Cria um novo assinante
- */
 export const createSubscriber = async (
   payload: SubscriberInput
 ): Promise<Subscriber> => {
@@ -73,9 +59,6 @@ export const createSubscriber = async (
   return data;
 };
 
-/**
- * Altera dados de um assinante (Nome, Email, Senha ou Status)
- */
 export const updateSubscriber = async (
   id: string,
   payload: SubscriberUpdateInput
@@ -84,17 +67,11 @@ export const updateSubscriber = async (
   return data;
 };
 
-/**
- * Renova a assinatura por mais X dias
- */
 export const renewSubscriber = async (id: string, dias: number = 30): Promise<Subscriber> => {
   const { data } = await api.put<Subscriber>(`/users/${id}`, { diasValidade: dias });
   return data;
 };
 
-/**
- * Deleta um assinante/usuário permanentemente
- */
 export const deleteSubscriber = async (id: string): Promise<void> => {
   await api.delete(`/users/${id}`);
 };
@@ -103,9 +80,6 @@ export const deleteSubscriber = async (id: string): Promise<void> => {
     API CALLS (ASSINANTE / PERFIL)
 ======================= */
 
-/**
- * Atualiza os dados do próprio perfil logado
- */
 export const updateMyProfile = async (
   id: string, 
   payload: SubscriberUpdateInput
@@ -114,9 +88,6 @@ export const updateMyProfile = async (
   return data;
 };
 
-/**
- * Altera a própria senha
- */
 export const changeMyPassword = async (
   id: string,
   novaSenha: string

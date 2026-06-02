@@ -33,12 +33,12 @@ import {
   Ban,
   Edit,
   UserCheck,
+  Layers,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { format, isBefore, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 import {
   getSubscribers,
@@ -46,8 +46,8 @@ import {
   deleteSubscriber,
   renewSubscriber,
   updateSubscriber,
-  Subscriber,
-  SubscriberInput,
+  type Subscriber,
+  type SubscriberInput,
 } from "@/services/subscriber";
 
 const Subscriptions = () => {
@@ -134,13 +134,45 @@ const Subscriptions = () => {
     const newStatus = user.status === "ATIVO" ? "BLOQUEADO" : "ATIVO";
     try {
       await updateSubscriber(user.id, { status: newStatus });
-      toast({ 
+      toast({
         title: newStatus === "BLOQUEADO" ? "Assinatura Pausada" : "Assinatura Reativada",
         description: `O usuário ${user.nome} foi ${newStatus.toLowerCase()}.`
       });
       loadSubscribers();
     } catch (error) {
       toast({ title: "Erro ao alterar status", variant: "destructive" });
+    }
+  };
+
+  const handlePlanChange = async (user: Subscriber, newPlan: string) => {
+    try {
+      await updateSubscriber(user.id, {
+        plan: newPlan as "VAZIO" | "STARTER" | "PRO",
+        diasValidade: 30
+      });
+      toast({
+        title: "Plano Atualizado",
+        description: `O plano de ${user.nome} mudou para ${newPlan} (+30 dias de validade).`
+      });
+      loadSubscribers();
+    } catch (error) {
+      toast({ title: "Erro ao atualizar plano", variant: "destructive" });
+    }
+  };
+
+  const handleDateChange = async (user: Subscriber, dateString: string) => {
+    if (!dateString) return;
+    try {
+      const selectedDate = new Date(dateString);
+      // Evita o erro de fuso horário local que joga a data 1 dia para trás
+      selectedDate.setMinutes(selectedDate.getMinutes() + selectedDate.getTimezoneOffset());
+
+      // 🌟 Corrigido: Passando como string .toISOString() para casar com a tipagem do service
+      await updateSubscriber(user.id, { vencimento: selectedDate.toISOString() });
+      toast({ title: "Vencimento updated com sucesso!" });
+      loadSubscribers();
+    } catch (error) {
+      toast({ title: "Erro ao alterar data de vencimento", variant: "destructive" });
     }
   };
 
@@ -189,25 +221,25 @@ const Subscriptions = () => {
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Gestão de Assinantes</h1>
-            <p className="text-muted-foreground mt-1">Controle total sobre acessos, status e renovações</p>
+            <h1 className="text-3xl font-bold tracking-tight text-white">Gestão de Assinantes</h1>
+            <p className="text-zinc-400 mt-1">Controle total sobre acessos, status e renovações</p>
           </div>
-          <Button onClick={() => setIsSheetOpen(true)} className="bg-gradient-gold hover:opacity-90 text-primary-foreground shadow-gold">
+          <Button onClick={() => setIsSheetOpen(true)} className="bg-gradient-gold hover:opacity-90 text-black font-semibold shadow-md">
             <UserPlus className="w-4 h-4 mr-2" /> Novo Assinante
           </Button>
         </div>
 
-        <Card className="p-0 bg-card/50 border-white/10 backdrop-blur-md shadow-xl overflow-hidden">
+        <Card className="p-0 bg-zinc-900/50 border-white/10 backdrop-blur-md shadow-xl overflow-hidden">
           <div className="p-6 flex flex-col md:flex-row justify-between gap-4">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-gold" /> Assinantes do Sistema
+              <ShieldCheck className="w-5 h-5 text-amber-500" /> Assinantes do Sistema
             </h2>
             <div className="flex gap-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <Input
                   placeholder="Buscar por nome, cpf..."
-                  className="pl-10 bg-white/5 border-white/10 w-full md:w-[300px] text-white focus:ring-gold"
+                  className="pl-10 bg-white/5 border-white/10 w-full md:w-[300px] text-white focus:ring-amber-500"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -221,9 +253,10 @@ const Subscriptions = () => {
           <div className="border-t border-white/5 overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-gradient-gold hover:bg-gradient-gold border-none">
+                <TableRow className="bg-zinc-900 border-none">
                   <TableHead className="text-white font-bold h-12">Assinante</TableHead>
                   <TableHead className="text-white font-bold h-12">CPF / Status</TableHead>
+                  <TableHead className="text-white font-bold h-12">Plano</TableHead>
                   <TableHead className="text-white font-bold h-12">Vencimento</TableHead>
                   <TableHead className="text-right text-white font-bold h-12 px-6">Ações</TableHead>
                 </TableRow>
@@ -231,7 +264,7 @@ const Subscriptions = () => {
               <TableBody>
                 {currentUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-20 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-20 text-zinc-500">
                       {loading ? "Carregando..." : "Nenhum assinante encontrado."}
                     </TableCell>
                   </TableRow>
@@ -240,30 +273,74 @@ const Subscriptions = () => {
                     const expiryDate = user.vencimento ? parseISO(user.vencimento) : null;
                     const isExpired = expiryDate ? isBefore(expiryDate, new Date()) : false;
                     const isBlocked = user.status === "BLOQUEADO";
+                    const inputDateFormat = expiryDate ? format(expiryDate, "yyyy-MM-dd") : "";
 
                     return (
                       <TableRow key={user.id} className={cn("border-white/5 hover:bg-white/5 transition-colors", isBlocked && "opacity-60")}>
                         <TableCell>
                           <div className="flex flex-col">
                             <span className="font-medium text-white">{user.nome}</span>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <span className="text-xs text-zinc-400 flex items-center gap-1">
                               <Mail className="w-3 h-3" /> {user.email}
                             </span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1">
-                            <span className="text-muted-foreground font-mono text-xs">{user.cpf}</span>
+                            <span className="text-zinc-400 font-mono text-xs">{user.cpf}</span>
                             <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full w-fit uppercase", isBlocked ? "bg-red-500/20 text-red-400" : "bg-emerald-500/20 text-emerald-400")}>
                               {user.status}
                             </span>
                           </div>
                         </TableCell>
+
                         <TableCell>
-                          <div className={cn("flex items-center gap-2 text-xs font-medium", isExpired ? "text-red-400" : "text-emerald-400")}>
-                            <CalendarClock className="w-3.5 h-3.5" />
-                            {expiryDate ? format(expiryDate, "dd/MM/yyyy", { locale: ptBR }) : "Sem vencimento"}
-                            {isExpired && <Ban className="w-3 h-3 ml-1" />}
+                          <div className="flex items-center gap-1.5">
+                            <Layers className="w-3.5 h-3.5 text-amber-500 hidden sm:inline" />
+                            <select
+                              value={user.plan || "VAZIO"}
+                              onChange={(e) => handlePlanChange(user, e.target.value)}
+                              className="bg-zinc-900 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500 cursor-pointer"
+                            >
+                              <option value="VAZIO">VAZIO</option>
+                              <option value="STARTER">STARTER</option>
+                              <option value="PRO">PRO</option>
+                            </select>
+                          </div>
+                        </TableCell>
+
+                        {/* 📅 COLUNA VENCIMENTO AJUSTADA (TODO O LABEL CLICÁVEL) */}
+                        <TableCell>
+                          <div
+                            className={cn(
+                              "group relative flex items-center justify-center gap-2 text-xs font-medium bg-white/[0.02] hover:bg-white/5 border border-white/5 rounded-xl p-2 transition-all cursor-pointer overflow-hidden",
+                              isExpired ? "text-red-400 border-red-500/20" : "text-emerald-400 border-emerald-500/20"
+                            )}
+                          >
+                            {/* Ícone Indicador Visual */}
+                            <CalendarClock className="w-4 h-4 text-inherit shrink-0 pointer-events-none z-10" />
+
+                            {/* Texto de exibição da data formatada no padrão brasileiro */}
+                            <span className="font-semibold tracking-wide font-mono z-10 pointer-events-none text-center">
+                              {expiryDate ? format(expiryDate, "dd/MM/yyyy") : "Sem data"}
+                            </span>
+
+                            {isExpired && <Ban className="w-3.5 h-3.5 text-red-400 shrink-0 pointer-events-none z-10 ml-auto" />}
+
+                            {/* Input invisível que cobre TODO o espaço do container para interceptar o clique */}
+                            <input
+                              type="date"
+                              value={inputDateFormat}
+                              onChange={(e) => handleDateChange(user, e.target.value)}
+                              onClick={(e) => {
+                                // Força a abertura do picker nativo em navegadores que suportam showPicker()
+                                if ('showPicker' in e.currentTarget) {
+                                  try { e.currentTarget.showPicker(); } catch { }
+                                }
+                              }}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20 [color-scheme:dark]"
+                              title="Clique em qualquer lugar aqui para alterar a data"
+                            />
                           </div>
                         </TableCell>
                         <TableCell className="text-right px-6">
@@ -292,7 +369,7 @@ const Subscriptions = () => {
 
           {filteredUsers.length > 0 && (
             <div className="flex items-center justify-between p-6 border-t border-white/5">
-              <div className="text-sm text-muted-foreground">Total: <span className="text-white font-medium">{filteredUsers.length}</span></div>
+              <div className="text-sm text-zinc-400">Total: <span className="text-white font-medium">{filteredUsers.length}</span></div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" className="bg-white/5 border-white/10 text-white" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1}><ChevronLeft className="w-4 h-4" /></Button>
                 <Button variant="outline" size="sm" className="bg-white/5 border-white/10 text-white" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}><ChevronRight className="w-4 h-4" /></Button>
@@ -303,10 +380,10 @@ const Subscriptions = () => {
       </div>
 
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent className="bg-card border-primary/20 text-white">
+        <SheetContent className="bg-zinc-950 border-white/10 text-white">
           <SheetHeader className="pb-6 border-b border-white/5">
             <SheetTitle className="text-2xl flex items-center gap-2 text-white">
-              {editingUser ? <Edit className="w-6 h-6 text-gold" /> : <UserPlus className="w-6 h-6 text-gold" />}
+              {editingUser ? <Edit className="w-6 h-6 text-amber-500" /> : <UserPlus className="w-6 h-6 text-amber-500" />}
               {editingUser ? "Editar Assinante" : "Novo Assinante"}
             </SheetTitle>
           </SheetHeader>
@@ -328,15 +405,15 @@ const Subscriptions = () => {
               <Label>{editingUser ? "Nova Senha (deixe vazio para manter)" : "Senha Inicial"}</Label>
               <div className="relative">
                 <Input type="password" placeholder="••••••••" className="bg-white/5 border-white/10 pr-10" value={formData.senhaPlana} onChange={(e) => setFormData({ ...formData, senhaPlana: e.target.value })} required={!editingUser} />
-                <Key className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Key className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
               </div>
             </div>
 
             <div className="pt-6 flex flex-col gap-3">
-              <Button type="submit" className="w-full bg-gradient-gold text-primary-foreground font-bold h-12">
+              <Button type="submit" className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold h-12">
                 {editingUser ? "Salvar Alterações" : "Criar Assinante"}
               </Button>
-              <Button type="button" variant="ghost" className="w-full text-muted-foreground" onClick={closeSheet}>Cancelar</Button>
+              <Button type="button" variant="ghost" className="w-full text-zinc-400" onClick={closeSheet}>Cancelar</Button>
             </div>
           </form>
         </SheetContent>

@@ -1,59 +1,86 @@
 import { api } from "./api";
 
-/* =======================
-    MODELS
-======================= */
+/* =========================================================
+    📋 MODELS (FRONTEND REFINADO PARA O NOVO BACKEND)
+   ========================================================= */
 
 /**
- * Interface que representa os detalhes analíticos do Score de um cliente (Model ClientScore do Prisma)
+ * 🟢 NOVO: Estrutura detalhada de lançamentos e pontualidade do histórico de pagamentos
  */
-export interface ClientScore {
-  id: string;
-  valor: number;
-  nivelAnalise: string;
-  // O backend envia campos Decimal como string para manter a precisão numérica
-  totalEmprestado: string;
-  totalPago: string;
-  retornoCapital: string;
-  noPrazo: number;
-  atrasos: number;
-  abertas: number;
-  motivos: string[];
-  clientId: string;
-  updatedAt: string; // Data ISO (ex: 2026-05-27T14:00:00.000Z)
+export interface PaymentHistoryCounters {
+  noPrazo: number;          // Quantidade de pagamentos reais feitos em dia
+  atrasos: number;          // Quantidade de pagamentos reais feitos após o vencimento
+  totalLancamentos: number; // Quantidade total de registros na tabela PaymentHistory
 }
 
 /**
- * Interface estendida do Cliente que já vem com o objeto de Score acoplado
+ * Interface que representa a quebra analítica de cada contrato do cliente
+ */
+export interface ContractDossier {
+  id: string;
+  status: "ABERTO" | "ATRASADO" | "QUITADO" | "COBRANCA_PESSOAL" | "CALOTEIRO";
+  periodicidade: "DAILY" | "WEEKLY" | "MONTHLY";
+  vencimento: string;
+  dinheiroEmprestado: number; 
+  valorEmAbertoAtual: number;  
+  taxaAcumuladaInadimplencia: number; // Multas geradas pelo motor
+  taxaDeJurosContratual: number;      // % de juros acordado
+  totalPago: number;     // Tudo que já foi pago neste contrato
+  principalPago: number; // Apenas amortização do principal
+  jurosPagos: number;    // Juros recuperados
+  taxasPagas: number;    // Multas/taxas recuperadas
+  totalParcelas: number;
+  
+  // 🟢 CAMPO ATUALIZADO: Vinculado diretamente ao retorno do novo ScoreService
+  historicoPagamentos: PaymentHistoryCounters;
+}
+
+/**
+ * Estrutura exata mapeada para renderizar os cards e contadores da foto do painel
+ */
+export interface PainelScoreData {
+  valor: number;
+  nivelAnalise: string; // Ex: "Análise Consistente", "Risco Crítico"
+  totalEmprestado: number; 
+  totalDevolvido: number;   
+  retornoCapitalPercent: number; // Ex: 84.00 (Pronto para a barra de progresso)
+  contadores: {
+    noPrazo: number;  // Parcelas pagas rigorosamente no prazo (acumulado histórico)
+    atrasos: number;  // Total de atrasos (atrasos históricos pagos + parcelas vencidas hoje)
+    abertas: number;  // Parcelas em aberto atualmente sem atraso crítico
+  };
+  motivos: string[];  // Array de logs explicativos para auditoria na tela
+}
+
+/**
+ * Interface principal do Cliente com o Dossiê e Painel Acoplados
  */
 export interface ClientWithScore {
   id: string;
   nome: string;
   cpf: string;
-  email?: string;
-  telefone?: string;
-  score: string; // Coluna legada/string do cliente
-  userId: string;
-  createdAt: string;
-  updatedAt: string;
-  clientScore: ClientScore | null; // Pode ser nulo se o motor nunca tiver rodado para este cliente
+  telefone: string;
+  scoreGlobal: number; // Score numérico direto (0 a 1000)
+  painelScore: PainelScoreData | null; // Dados exatos para os cards da foto
+  contratos: ContractDossier[]; // Dossiê de todos os contratos dele
 }
 
 /**
- * Resposta padrão da rota de recálculo manual
+ * Resposta atualizada da rota de recálculo manual (que agora já traz os dados novos)
  */
 export interface RecalculateScoresResponse {
   success: boolean;
   message: string;
+  data: ClientWithScore[]; // O backend agora já retorna os dados atualizados!
 }
 
-/* =======================
-    API CALLS
-======================= */
+/* =========================================================
+    🌐 API CALLS
+   ========================================================= */
 
 /**
  * Busca a listagem completa de todos os clientes do usuário com seus respectivos scores incluídos
- * GET /scores/clients-scores
+ * GET /score/clients
  */
 export const getClientsWithScores = async (): Promise<ClientWithScore[]> => {
   const { data } = await api.get<ClientWithScore[]>("/score/clients");
@@ -61,8 +88,8 @@ export const getClientsWithScores = async (): Promise<ClientWithScore[]> => {
 };
 
 /**
- * Dispara o motor de crédito do backend para recalcular as notas de todos os clientes instantaneamente
- * POST /scores/recalculate-scores
+ * Dispara o motor de crédito para recalcular as notas instantaneamente e já colhe a resposta atualizada
+ * POST /score/recalculate
  */
 export const forceRecalculateScores = async (): Promise<RecalculateScoresResponse> => {
   const { data } = await api.post<RecalculateScoresResponse>("/score/recalculate");

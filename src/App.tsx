@@ -22,6 +22,7 @@ import QuadroCaloteiros from "./pages/QuadroCaloteiros";
 // IMPORTAÇÕES DAS NOVAS TELAS
 import Score from "./pages/Score";
 import Backup from "./pages/Backup";
+import Negotiations from "./pages/Negotiation";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,17 @@ const App = () => (
               <PrivateRoute>
                 <Layout>
                   <Balance />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/negociacoes"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Negotiations />
                 </Layout>
               </PrivateRoute>
             }
