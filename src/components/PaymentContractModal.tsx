@@ -122,9 +122,9 @@ export default function PaymentContractModal({
 
       return {
         valorEmprestado,
-        principalTotal: juros, // Mantido como juros para alimentar a linha correspondente
+        principalTotal: juros,
         taxaTotal: taxaEfetiva,
-        total: valorEmprestado + juros + taxaEfetiva, // Agora soma tudo: 1000 + 400 + taxa
+        total: valorEmprestado + juros + taxaEfetiva,
         descricao: "Juros do Ciclo + Principal + Taxas",
         count: 0,
       };
@@ -148,7 +148,7 @@ export default function PaymentContractModal({
 
   const paymentMutation = useMutation({
     mutationFn: async (payload: {
-      tipo: "JUROS" | "PRINCIPAL" | "MISTO";
+      tipo: "JUROS" | "PRINCIPAL" | "MISTO" | "PERSONALIZADO";
       valorPago: number;
       valorDestinadoTaxa?: number;
       observacao?: string;
@@ -182,14 +182,26 @@ export default function PaymentContractModal({
   const handlePay = () => {
     if (!activeContract || summary.total <= 0) return;
     paymentMutation.mutate({
-      tipo: isParcelado ? "MISTO" : "JUROS",
-      valorPago: isParcelado ? summary.total : summary.principalTotal + summary.taxaTotal, // No botão "Pagar Juros" envia apenas o juros + taxa se preferir separar do principal na rota de juros pura.
+      // ✅ Ajuste: Se for mensal e estiver customizado, envia PERSONALIZADO
+      tipo: isParcelado ? "MISTO" : (isCustomPayment ? "PERSONALIZADO" : "JUROS"),
+      valorPago: isParcelado ? summary.total : summary.principalTotal + summary.taxaTotal,
       valorDestinadoTaxa: isCustomPayment ? Number(customTaxValue || 0) : undefined,
       observacao: isCustomPayment
         ? `Pagamento Personalizado: Taxa ajustada para ${formatCurrency(Number(customTaxValue))}`
         : isParcelado
           ? `Pagamento de ${summary.count} parcela(s) selecionada(s).`
           : "Pagamento de Juros do Ciclo",
+    });
+  };
+
+  const handlePayJurosCustom = () => {
+    if (!activeContract) return;
+    const customTax = Number(customTaxValue || 0);
+    paymentMutation.mutate({
+      tipo: isParcelado ? "MISTO" : "PERSONALIZADO",
+      valorPago: isParcelado ? summary.total : summary.principalTotal + customTax,
+      valorDestinadoTaxa: customTax,
+      observacao: `Pagamento Personalizado: Juros/Seleção com Taxa ajustada para ${formatCurrency(customTax)}`,
     });
   };
 
@@ -201,6 +213,20 @@ export default function PaymentContractModal({
       tipo: "MISTO",
       valorPago: valorQuitacao,
       observacao: "Quitação Total"
+    });
+  };
+
+  const handleQuitCustom = () => {
+    if (!activeContract) return;
+    const customTax = Number(customTaxValue || 0);
+    const valorQuitacao = Number(activeContract.valorEmAberto || 0) + customTax;
+
+    paymentMutation.mutate({
+      // ✅ Ajuste fixado: Se for mensal modificado, envia PERSONALIZADO para acionar o back-end
+      tipo: isParcelado ? "MISTO" : "PERSONALIZADO",
+      valorPago: valorQuitacao,
+      valorDestinadoTaxa: customTax,
+      observacao: `Quitação Total com Taxa ajustada para ${formatCurrency(customTax)}`
     });
   };
 
@@ -269,7 +295,7 @@ export default function PaymentContractModal({
         ) : (
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
 
-            {/* LADO ESQUERDO: APENAS SE FOR PARCELADO */}
+            {/* LADO ESQUERDO: PARCELADO */}
             {isParcelado && (
               <div className="flex-1 flex flex-col overflow-hidden bg-black/20">
                 <div className="shrink-0 p-3 bg-white/5 border-b border-white/10 flex justify-between items-center text-[10px] text-gray-400 font-medium uppercase tracking-wider">
@@ -318,7 +344,7 @@ export default function PaymentContractModal({
               </div>
             )}
 
-            {/* LADO DIREITO / RESUMO COMPACTO */}
+            {/* LADO DIREITO / RESUMO */}
             <div className={cn(
               "bg-[#020617] border-white/10 flex flex-col p-4 z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] md:shadow-none",
               isParcelado ? "shrink-0 w-full md:w-[350px] border-t md:border-t-0 md:border-l" : "w-full"
@@ -326,7 +352,6 @@ export default function PaymentContractModal({
               <div className="mb-4">
                 <div className="space-y-3 bg-white/5 p-3 rounded-lg border border-white/10">
                   
-                  {/* EXIBE O VALOR EMPRESTADO APENAS SE FOR MENSAL */}
                   {!isParcelado && (
                     <div className="flex justify-between items-center text-xs sm:text-sm">
                       <span className="text-gray-400">Valor Emprestado</span>
@@ -365,7 +390,6 @@ export default function PaymentContractModal({
                     </div>
                   </div>
 
-                  {/* CAIXA INFORMATIVA DA TAXA CUSTOMIZADA */}
                   {isCustomPayment && (
                     <div className="pt-2 border-t border-white/10 space-y-2">
                       <div className="bg-blue-500/10 border border-blue-500/20 rounded-md p-2 flex items-start gap-1.5">
@@ -394,49 +418,87 @@ export default function PaymentContractModal({
                 </div>
               </div>
 
-              {/* CONTROLES DE BOTÃO */}
+              {/* BOTÕES DE CONTROLE */}
               <div className="grid grid-cols-1 gap-2 mt-auto">
-                {(!isParcelado || selectedIds.size <= 1) && (
-                  <Button
-                    variant="ghost"
-                    className={cn("w-full h-9 border border-white/10 text-[10px] uppercase tracking-widest", isCustomPayment ? "bg-blue-600/20 text-blue-400" : "text-gray-400")}
-                    onClick={() => { setIsCustomPayment(!isCustomPayment); setCustomTaxValue(""); }}
-                  >
-                    <Settings2 className="w-3 h-3 mr-2" />
-                    {isCustomPayment ? "Cancelar Ajuste" : "Personalizar Taxa"}
-                  </Button>
+                {isCustomPayment ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      className="w-full h-9 border border-white/10 text-[10px] uppercase tracking-widest bg-blue-600/20 text-blue-400"
+                      onClick={() => { setIsCustomPayment(false); setCustomTaxValue(""); }}
+                    >
+                      <Settings2 className="w-3 h-3 mr-2" />
+                      Cancelar Ajuste
+                    </Button>
+
+                    <Button
+                      size="lg"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 shadow-lg"
+                      onClick={handlePayJurosCustom}
+                      disabled={paymentMutation.isPending}
+                    >
+                      {paymentMutation.isPending ? <Loader2 className="animate-spin" /> : (
+                        <div className="flex items-center justify-between w-full px-2">
+                          <span className="text-sm">Pagar Juros com Nova Taxa</span>
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </div>
+                      )}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="w-full border-green-500/20 text-green-500 hover:bg-green-500/10 h-10 text-xs"
+                      onClick={handleQuitCustom}
+                      disabled={paymentMutation.isPending}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" /> Quitar com Nova Taxa
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {(!isParcelado || selectedIds.size <= 1) && (
+                      <Button
+                        variant="ghost"
+                        className="w-full h-9 border border-white/10 text-[10px] uppercase tracking-widest text-gray-400"
+                        onClick={() => { setIsCustomPayment(true); setCustomTaxValue(""); }}
+                      >
+                        <Settings2 className="w-3 h-3 mr-2" />
+                        Personalizar Taxa
+                      </Button>
+                    )}
+
+                    {isParcelado && selectedIds.size > 1 && (
+                      <div className="text-[10px] text-gray-500 text-center py-1 italic">
+                        Remova seleções para permitir personalizar a taxa.
+                      </div>
+                    )}
+
+                    <Button
+                      size="lg"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 shadow-lg"
+                      onClick={handlePay}
+                      disabled={paymentMutation.isPending || (isParcelado && summary.total <= 0)}
+                    >
+                      {paymentMutation.isPending ? <Loader2 className="animate-spin" /> : (
+                        <div className="flex items-center justify-between w-full px-2">
+                          <span className="text-sm">
+                            {isParcelado ? "Pagar Seleção" : "Pagar Juros"}
+                          </span>
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </div>
+                      )}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="w-full border-green-500/20 text-green-500 hover:bg-green-500/10 h-10 text-xs"
+                      onClick={handleQuit}
+                      disabled={paymentMutation.isPending}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" /> Quitar Contrato
+                    </Button>
+                  </>
                 )}
-
-                {isParcelado && selectedIds.size > 1 && (
-                  <div className="text-[10px] text-gray-500 text-center py-1 italic">
-                    Remova seleções para permitir personalizar a taxa.
-                  </div>
-                )}
-
-                <Button
-                  size="lg"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 shadow-lg"
-                  onClick={handlePay}
-                  disabled={paymentMutation.isPending || (isParcelado && summary.total <= 0)}
-                >
-                  {paymentMutation.isPending ? <Loader2 className="animate-spin" /> : (
-                    <div className="flex items-center justify-between w-full px-2">
-                      <span className="text-sm">
-                        {isCustomPayment ? "Confirmar" : isParcelado ? "Pagar Seleção" : "Pagar Juros"}
-                      </span>
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </div>
-                  )}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="w-full border-green-500/20 text-green-500 hover:bg-green-500/10 h-10 text-xs"
-                  onClick={handleQuit}
-                  disabled={paymentMutation.isPending}
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" /> Quitar Contrato
-                </Button>
               </div>
             </div>
 

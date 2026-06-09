@@ -44,7 +44,7 @@ export type Client = {
 export type PaymentHistory = {
   id: string;
 
-  tipo: "JUROS" | "PRINCIPAL" | "MISTO";
+  tipo: "JUROS" | "PRINCIPAL" | "MISTO" | "PERSONALIZADO";
 
   valorPago: number;
   pagoJuros: number;
