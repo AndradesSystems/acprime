@@ -86,16 +86,6 @@ export type PaymentPeriodItem = {
     ✅ OPERAÇÕES DE PAGAMENTO
 =============================== */
 
-export async function payFullContract(contractId: string) {
-  const { data } = await api.post(`/payment/contracts/${contractId}/pay-full`);
-  return data;
-}
-
-export async function payInstallment(installmentId: string) {
-  const { data } = await api.post(`/payment/installments/${installmentId}/pay`);
-  return data;
-}
-
 export async function createPayment(
   contractId: string,
   paymentData: { tipo: string; valorPago: number; observacao?: string }
