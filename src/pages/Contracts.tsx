@@ -18,7 +18,6 @@ import { toggleContractCaloteiroStatus, type CaloteiroAction } from "@/services/
 
 import NewContractSheet from "@/components/NewContractSheet";
 import PaymentContractModal from "@/components/PaymentContractModal";
-import PaymentHistoryModal from "@/components/PaymentHistoryModal";
 import FinanceSummaryCard from "@/components/FinanceSummaryCard";
 import DateRangePicker from "@/components/DateRangePicker";
 import SettingsModal from "@/components/SettingModal";
@@ -334,12 +333,6 @@ const Contracts = () => {
           setSelectedContract(null);
           handleManualRefresh();
         }}
-      />
-
-      <PaymentHistoryModal
-        open={!!historyContract}
-        contract={historyContract}
-        onClose={() => setHistoryContract(null)}
       />
 
       <UpdateDueDateModal
