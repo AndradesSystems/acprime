@@ -68,9 +68,11 @@ export default function PaymentContractModal({
 
   const activeContract = fullContract || initialData;
 
+  // ✅ ADICIONADO: Suporte para a nova periodicidade "PARCELADO" na lógica de renderização e cálculo
   const isParcelado =
     activeContract?.periodicity === "DAILY" ||
-    activeContract?.periodicity === "WEEKLY";
+    activeContract?.periodicity === "WEEKLY" ||
+    activeContract?.periodicity === "PARCELADO"; 
 
   useEffect(() => {
     if (open && activeContract?.installments) {
@@ -130,7 +132,7 @@ export default function PaymentContractModal({
       };
     }
 
-    // Regra para Contrato Parcelado (Diário/Semanal)
+    // Regra para Contrato Parcelado (Diário/Semanal/Parcelado)
     const selectedInstallments = pendingInstallments.filter((i) => selectedIds.has(i.id));
     const principalTotal = selectedInstallments.reduce((acc, curr) => acc + Number(curr.valor), 0);
     const taxaOriginal = selectedInstallments.reduce((acc, curr) => acc + Number(curr.taxa || 0), 0);

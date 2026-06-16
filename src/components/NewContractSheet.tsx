@@ -50,14 +50,17 @@ import { parseCurrencyToNumber, formatCurrencyInput } from "@/lib/utils";
     HELPERS
 ======================= */
 
+// 🛠️ AJUSTADO: Adicionado suporte ao tipo "PARCELADO" no retorno do Enum
 const mapPeriodicityToEnum = (
   periodicidade: string
-): "DAILY" | "WEEKLY" | "MONTHLY" => {
+): "DAILY" | "WEEKLY" | "MONTHLY" | "PARCELADO" => {
   switch (periodicidade) {
     case "DIARIO":
       return "DAILY";
     case "SEMANAL":
       return "WEEKLY";
+    case "PARCELADO":
+      return "PARCELADO";
     default:
       return "MONTHLY";
   }
@@ -106,12 +109,14 @@ const NewContractSheet = ({
   const [isOpen, setIsOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
+  // 🛠 ??USTADO: Adicionado 'qtdParcelas' no estado inicial do formulário
   const [formData, setFormData] = useState({
     clientId: "",
     valorPrincipal: "",
     jurosPercent: "40",
     periodicidade: "MENSAL",
     dataInicio: "",
+    qtdParcelas: "5", // Valor padrão seguro inicial
     historico: "",
   });
 
@@ -151,6 +156,12 @@ const NewContractSheet = ({
         return;
     }
 
+    // 🛠️ AJUSTADO: Validação para impedir o envio se o número de parcelas for inválido no modo parcelado
+    if (formData.periodicidade === "PARCELADO" && (!formData.qtdParcelas || Number(formData.qtdParcelas) <= 0)) {
+      toast({ title: "Quantidade inválida", description: "Informe o número de parcelas da operação.", variant: "destructive" });
+      return;
+    }
+
     // 🔒 VALIDAÇÃO DE SALDO (NOVO)
     if (isSaldoInsuficiente) {
       toast({ 
@@ -165,6 +176,7 @@ const NewContractSheet = ({
       const dataInicioString = formData.dataInicio || getTodayString();
       const dataInicioISO = parseDateInputToISO(dataInicioString);
 
+      // 🛠️ AJUSTADO: Mapeia e injeta o `qtdParcelas` dinamicamente no payload enviado para o serviço
       await createContract({
         clientId: formData.clientId,
         valorPrincipal: valorNumerico,
@@ -173,6 +185,7 @@ const NewContractSheet = ({
         periodicity: mapPeriodicityToEnum(formData.periodicidade),
         dataInicio: dataInicioISO,
         historico: formData.historico || undefined,
+        qtdParcelas: formData.periodicidade === "PARCELADO" ? Number(formData.qtdParcelas) : undefined,
       });
 
       toast({ title: "Contrato criado com sucesso" });
@@ -184,6 +197,7 @@ const NewContractSheet = ({
         jurosPercent: "40",
         periodicidade: "MENSAL",
         dataInicio: "",
+        qtdParcelas: "5",
         historico: "",
       });
 
@@ -300,7 +314,7 @@ const NewContractSheet = ({
               </div>
 
               <div className="space-y-2">
-                <Label>Juros (%) *</Label>
+                <Label>{formData.periodicidade === "PARCELADO" ? "Juros Total (%) *" : "Juros (%) *"}</Label>
                 <div className="relative">
                   <Input
                     type="number"
@@ -329,16 +343,26 @@ const NewContractSheet = ({
             <div className="flex items-center justify-between px-1 py-2 border-t border-white/5 mt-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground italic">
                 <Calculator className="w-3.5 h-3.5 text-gold" />
-                Rendimento do período:
+                <span>{formData.periodicidade === "PARCELADO" ? "Total de Juros:" : "Rendimento do período:"}</span>
               </div>
               <div className="text-lg font-bold text-gold font-mono">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(jurosCalculado)}
               </div>
             </div>
+
+            {/* 🛠️ AJUSTADO: Seção de Preview dinâmico do valor de cada parcela (Apenas se for Parcelado) */}
+            {formData.periodicidade === "PARCELADO" && valorNumerico > 0 && Number(formData.qtdParcelas) > 0 && (
+              <div className="flex items-center justify-between px-1 py-2 border-t border-dashed border-white/10">
+                <div className="text-sm text-muted-foreground italic">Valor estimado da parcela:</div>
+                <div className="text-sm font-semibold font-mono text-white/90">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((valorNumerico + jurosCalculado) / Number(formData.qtdParcelas))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-             {/* PERIODICIDADE */}
+            {/* PERIODICIDADE */}
             <div className="space-y-2">
               <Label>Periodicidade *</Label>
               <Select
@@ -352,23 +376,45 @@ const NewContractSheet = ({
                   <SelectItem value="DIARIO">Diário</SelectItem>
                   <SelectItem value="SEMANAL">Semanal</SelectItem>
                   <SelectItem value="MENSAL">Mensal</SelectItem>
+                  {/* 🛠️ AJUSTADO: Nova opção adicionada ao Select */}
+                  <SelectItem value="PARCELADO">Parcelado (Fixo)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* DATA INÍCIO */}
             <div className="space-y-2">
-              <Label>Data de início</Label>
+              <Label>{formData.periodicidade === "PARCELADO" ? "Primeiro Vencimento *" : "Data de início"}</Label>
               <Input
                 type="date"
                 value={formData.dataInicio}
                 onChange={(e) => setFormData({ ...formData, dataInicio: e.target.value })}
+                required={formData.periodicidade === "PARCELADO"}
               />
             </div>
           </div>
 
+          {/* 🛠️ AJUSTADO: CAMPO TOTALMENTE CONDICIONAL. Só aparece se 'PARCELADO' estiver selecionado */}
+          {formData.periodicidade === "PARCELADO" && (
+            <div className="space-y-2 p-3 rounded-lg border border-white/10 bg-white/5 animate-in fade-in duration-200">
+              <Label>Quantidade de parcelas *</Label>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={formData.qtdParcelas}
+                onChange={(e) => setFormData({ ...formData, qtdParcelas: e.target.value })}
+                placeholder="Ex: 5"
+                required
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Informe o número exato de parcelas para a divisão do saldo total.
+              </p>
+            </div>
+          )}
+
           <p className="text-[11px] text-muted-foreground -mt-2">
-            * Deixe a data em branco para usar hoje.
+            * Deixe a data em branco para usar hoje (exceto na modalidade parcelada).
           </p>
 
           {/* HISTÓRICO */}

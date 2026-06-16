@@ -31,6 +31,7 @@ export type DashboardSummary = {
     viaTaxas: number;
   };
   recentContracts: DashboardRecentContract[];
+  contratosAtrasados: number
 };
 
 export const getDashboardSummary = async (params: {

@@ -11,7 +11,7 @@ export type ContractStatus =
   | "PAGO"
   | "COBRANCA_PESSOAL";
 
-export type ContractPeriodicity = "DAILY" | "WEEKLY" | "MONTHLY";
+export type ContractPeriodicity = "DAILY" | "WEEKLY" | "MONTHLY" | "PARCELADO";
 export type InstallmentStatus = "PENDENTE" | "PAGO";
 
 /* ✅ NOVO: TIPO DA PARCELA */
@@ -72,7 +72,7 @@ export type Contract = {
 
   valorPrincipal: string;
   valorEmAberto: string;
-  
+
   taxa: string;
 
   jurosPercent: string;
@@ -92,15 +92,16 @@ export type Contract = {
   /** relations */
   client?: Client;
   payments?: PaymentHistory[];
-  
+
   // ✅ NOVO: Lista de parcelas (para Diário/Semanal)
-  installments?: ContractInstallment[]; 
+  installments?: ContractInstallment[];
 };
 
 /* ===== INPUT ===== */
 /**
  * ⚠️ O Input não muda, pois o backend calcula as parcelas sozinho
  */
+
 export type ContractInput = {
   clientId: string;
   valorPrincipal: number;
@@ -111,6 +112,7 @@ export type ContractInput = {
 
   dataInicio?: string; // 👈 novo campo opcional
   historico?: string;
+  qtdParcelas?: number; // 🔥 ADICIONE ESTA LINHA AQUI!
 };
 
 
@@ -157,9 +159,9 @@ export type ContractSummary = {
   totalMes: number;
   totalComMulta: number;
   vencimentoEm: string;
-  
+
   // ✅ NOVO: O Summary agora retorna as parcelas para você mostrar na tela de pagamento
-  installments?: ContractInstallment[]; 
+  installments?: ContractInstallment[];
 };
 
 export const getContractSummary = async (id: string): Promise<ContractSummary> => {

@@ -367,7 +367,7 @@ const Dashboard = () => {
                   </div>
                   <div className="space-y-1">
                     <h3 className="text-4xl font-extrabold text-white tracking-tighter">
-                      {qtdContratosAtrasados} <span className="text-lg font-normal text-zinc-400">contratos</span>
+                      {data.contratosAtrasados} <span className="text-lg font-normal text-zinc-400">contratos</span>
                     </h3>
                     <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                       Inadimplência líquida aguardando quitação
