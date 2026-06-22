@@ -7,7 +7,7 @@ import { api } from "./api";
 export type PaymentHistoryItem = {
   id: string;
   contractId: string;
-  tipo: "JUROS" | "PRINCIPAL" | "MISTO";
+  tipo: "JUROS" | "PRINCIPAL" | "MISTO" | "AMORTIZACAO"; // ✅ Adicionado AMORTIZACAO
   valorPago: number;
   pagoJuros: number;
   pagoPrincipal: number;
@@ -53,7 +53,7 @@ export interface FinanceSummaryResponse {
 
 export type PaymentPeriodItem = {
   id: string;
-  tipo: "JUROS" | "PRINCIPAL" | "MISTO";
+  tipo: "JUROS" | "PRINCIPAL" | "MISTO" | "AMORTIZACAO"; // ✅ Adicionado AMORTIZACAO
   valorPago: number;
   pagoJuros: number;
   pagoPrincipal: number;
@@ -82,6 +82,16 @@ export type PaymentPeriodItem = {
   };
 };
 
+/* ✅ NOVO: INTERFACE PARA O PAYLOAD DE AMORTIZAÇÃO SECA */
+export interface AmortizePaymentPayload {
+  tipo: string;
+  valorPago: number;
+  valorDestinadoPrincipal: number;
+  valorDestinadoJuros: number;
+  valorDestinadoTaxa: number;
+  observacao?: string;
+}
+
 /* ===============================
     ✅ OPERAÇÕES DE PAGAMENTO
 =============================== */
@@ -93,6 +103,22 @@ export async function createPayment(
   const { data } = await api.post(
     `/payment/contracts/${contractId}`,
     paymentData
+  );
+  return data;
+}
+
+/**
+ * 🎯 NOVO: AMORTIZAÇÃO DIRETA DE CONTRATO
+ * Envia os valores exatos de abatimento para o backend
+ */
+export async function amortizeContract(
+  contractId: string,
+  amortizeData: AmortizePaymentPayload
+) {
+  // Ajustado para seguir o seu padrão de prefixo de rota `/payment/...`
+  const { data } = await api.post(
+    `/payment/amortize/${contractId}`,
+    amortizeData
   );
   return data;
 }

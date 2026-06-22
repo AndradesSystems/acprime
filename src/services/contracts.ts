@@ -14,7 +14,7 @@ export type ContractStatus =
 export type ContractPeriodicity = "DAILY" | "WEEKLY" | "MONTHLY" | "PARCELADO";
 export type InstallmentStatus = "PENDENTE" | "PAGO";
 
-/* ✅ NOVO: TIPO DA PARCELA */
+/* ✅ TIPO DA PARCELA */
 export type ContractInstallment = {
   id: string;
   numeroParcela: number;
@@ -44,7 +44,8 @@ export type Client = {
 export type PaymentHistory = {
   id: string;
 
-  tipo: "JUROS" | "PRINCIPAL" | "MISTO" | "PERSONALIZADO";
+  // ✅ ADICIONADO: "AMORTIZACAO" incluído nos tipos de pagamentos
+  tipo: "JUROS" | "PRINCIPAL" | "MISTO" | "PERSONALIZADO" | "AMORTIZACAO";
 
   valorPago: number;
   pagoJuros: number;
@@ -64,6 +65,15 @@ export type PaymentHistory = {
   };
 };
 
+/* ✅ NOVO: INTERFACE PARA O PAYLOAD DE AMORTIZAÇÃO SECA */
+export interface AmortizePaymentPayload {
+  tipo: "AMORTIZACAO";
+  valorPago: number;
+  valorDestinadoPrincipal: number;
+  valorDestinadoJuros: number;
+  valorDestinadoTaxa: number;
+  observacao?: string;
+}
 
 /* ===== CONTRACT ===== */
 
@@ -93,15 +103,11 @@ export type Contract = {
   client?: Client;
   payments?: PaymentHistory[];
 
-  // ✅ NOVO: Lista de parcelas (para Diário/Semanal)
+  // ✅ Lista de parcelas (para Diário/Semanal)
   installments?: ContractInstallment[];
 };
 
 /* ===== INPUT ===== */
-/**
- * ⚠️ O Input não muda, pois o backend calcula as parcelas sozinho
- */
-
 export type ContractInput = {
   clientId: string;
   valorPrincipal: number;
@@ -160,7 +166,7 @@ export type ContractSummary = {
   totalComMulta: number;
   vencimentoEm: string;
 
-  // ✅ NOVO: O Summary agora retorna as parcelas para você mostrar na tela de pagamento
+  // ✅ O Summary agora retorna as parcelas para você mostrar na tela de pagamento
   installments?: ContractInstallment[];
 };
 
@@ -185,7 +191,7 @@ export async function deleteContract(id: string) {
 }
 
 /* =======================
-   UPDATE DUE DATE
+    UPDATE DUE DATE
 ======================= */
 
 export const updateContractDueDate = async (

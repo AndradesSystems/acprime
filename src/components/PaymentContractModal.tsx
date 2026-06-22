@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -33,12 +33,10 @@ import {
   X,
   Info,
 } from "lucide-react";
-import { toast } from "sonner";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/services/api";
-import { getContractById } from "@/services/contracts";
 import type { Contract } from "@/services/contracts";
 import { cn } from "@/lib/utils";
+
+import { usePaymentContract } from "./usePaymentContract";
 
 type Props = {
   open: boolean;
@@ -53,198 +51,47 @@ export default function PaymentContractModal({
   onClose,
   onUpdatedContract,
 }: Props) {
-  const queryClient = useQueryClient();
+  const props = usePaymentContract(open, initialData, onClose, onUpdatedContract);
+  const { activeContract, isLoading, isParcelado, selectedIds, summary, isCustomPayment, customTaxValue, pendingInstallments } = props;
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [customTaxValue, setCustomTaxValue] = useState<string>("");
-  const [isCustomPayment, setIsCustomPayment] = useState(false);
+  // Estados baseados estritamente na interface AmortizePaymentPayload
+  const [valPrincipal, setValPrincipal] = useState("");
+  const [valJuros, setValJuros] = useState("");
+  const [valTaxa, setValTaxa] = useState("");
+  const [observacao, setObservacao] = useState("");
 
-  const { data: fullContract, isLoading } = useQuery({
-    queryKey: ["contract-detail", initialData?.id],
-    queryFn: () => getContractById(initialData!.id),
-    enabled: open && !!initialData?.id,
-    staleTime: 0,
-  });
-
-  const activeContract = fullContract || initialData;
-
-  // ✅ ADICIONADO: Suporte para a nova periodicidade "PARCELADO" na lógica de renderização e cálculo
-  const isParcelado =
-    activeContract?.periodicity === "DAILY" ||
-    activeContract?.periodicity === "WEEKLY" ||
-    activeContract?.periodicity === "PARCELADO"; 
-
-  useEffect(() => {
-    if (open && activeContract?.installments) {
-      const firstPending = activeContract.installments
-        .sort((a, b) => a.numeroParcela - b.numeroParcela)
-        .find((i) => i.status === "PENDENTE");
-
-      if (firstPending && isParcelado) {
-        setSelectedIds(new Set([firstPending.id]));
-      } else {
-        setSelectedIds(new Set());
-      }
-      setIsCustomPayment(false);
-      setCustomTaxValue("");
-    }
-  }, [open, activeContract?.id, isParcelado]);
-
-  const { pendingInstallments } = useMemo(() => {
-    if (!activeContract?.installments)
-      return { pendingInstallments: [], paidInstallments: [] };
-
-    const sorted = [...activeContract.installments].sort(
-      (a, b) => a.numeroParcela - b.numeroParcela
-    );
-
-    return {
-      paidInstallments: sorted.filter((i) => i.status === "PAGO"),
-      pendingInstallments: sorted.filter((i) => i.status === "PENDENTE"),
-    };
-  }, [activeContract]);
-
-  useEffect(() => {
-    if (selectedIds.size > 1 && isCustomPayment) {
-      setIsCustomPayment(false);
-      setCustomTaxValue("");
-      toast.info("A personalização de taxa foi desabilitada pois múltiplas parcelas foram selecionadas.");
-    }
-  }, [selectedIds, isCustomPayment]);
-
-  const summary = useMemo(() => {
-    if (!activeContract) return { total: 0, taxaTotal: 0, principalTotal: 0, valorEmprestado: 0, count: 0, descricao: "" };
-
-    // Regra para Contrato Mensal
-    if (!isParcelado) {
-      const valorEmprestado = Number(activeContract.valorPrincipal || 0);
-      const juros = valorEmprestado * (Number(activeContract.jurosPercent) / 100);
-      const taxaContrato = Number(activeContract.taxa || 0);
-      const taxaEfetiva = isCustomPayment ? Number(customTaxValue || 0) : taxaContrato;
-
-      return {
-        valorEmprestado,
-        principalTotal: juros,
-        taxaTotal: taxaEfetiva,
-        total: valorEmprestado + juros + taxaEfetiva,
-        descricao: "Juros do Ciclo + Principal + Taxas",
-        count: 0,
-      };
-    }
-
-    // Regra para Contrato Parcelado (Diário/Semanal/Parcelado)
-    const selectedInstallments = pendingInstallments.filter((i) => selectedIds.has(i.id));
-    const principalTotal = selectedInstallments.reduce((acc, curr) => acc + Number(curr.valor), 0);
-    const taxaOriginal = selectedInstallments.reduce((acc, curr) => acc + Number(curr.taxa || 0), 0);
-    const taxaEfetiva = isCustomPayment ? Number(customTaxValue || 0) : taxaOriginal;
-
-    return {
-      valorEmprestado: 0,
-      principalTotal,
-      taxaTotal: taxaEfetiva,
-      total: principalTotal + taxaEfetiva,
-      count: selectedInstallments.length,
-      descricao: `${selectedInstallments.length} parcela(s) selecionada(s)`,
-    };
-  }, [isParcelado, activeContract, pendingInstallments, selectedIds, isCustomPayment, customTaxValue]);
-
-  const paymentMutation = useMutation({
-    mutationFn: async (payload: {
-      tipo: "JUROS" | "PRINCIPAL" | "MISTO" | "PERSONALIZADO";
-      valorPago: number;
-      valorDestinadoTaxa?: number;
-      observacao?: string;
-    }) => {
-      if (!activeContract) throw new Error("Sem contrato");
-      const { data } = await api.post(`/payment/contracts/${activeContract.id}`, payload);
-      return data;
-    },
-    onSuccess: (data) => {
-      toast.success("Pagamento realizado com sucesso!");
-      onUpdatedContract?.(data.contract);
-      queryClient.invalidateQueries({ queryKey: ["contracts"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["contract-detail"] });
-      onClose();
-    },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.message || "Erro ao processar pagamento");
-    },
-  });
-
-  const toggleInstallment = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handlePay = () => {
-    if (!activeContract || summary.total <= 0) return;
-    paymentMutation.mutate({
-      // ✅ Ajuste: Se for mensal e estiver customizado, envia PERSONALIZADO
-      tipo: isParcelado ? "MISTO" : (isCustomPayment ? "PERSONALIZADO" : "JUROS"),
-      valorPago: isParcelado ? summary.total : summary.principalTotal + summary.taxaTotal,
-      valorDestinadoTaxa: isCustomPayment ? Number(customTaxValue || 0) : undefined,
-      observacao: isCustomPayment
-        ? `Pagamento Personalizado: Taxa ajustada para ${formatCurrency(Number(customTaxValue))}`
-        : isParcelado
-          ? `Pagamento de ${summary.count} parcela(s) selecionada(s).`
-          : "Pagamento de Juros do Ciclo",
-    });
-  };
-
-  const handlePayJurosCustom = () => {
-    if (!activeContract) return;
-    const customTax = Number(customTaxValue || 0);
-    paymentMutation.mutate({
-      tipo: isParcelado ? "MISTO" : "PERSONALIZADO",
-      valorPago: isParcelado ? summary.total : summary.principalTotal + customTax,
-      valorDestinadoTaxa: customTax,
-      observacao: `Pagamento Personalizado: Juros/Seleção com Taxa ajustada para ${formatCurrency(customTax)}`,
-    });
-  };
-
-  const handleQuit = () => {
-    if (!activeContract) return;
-    const valorQuitacao = Number(activeContract.valorEmAberto || 0) + Number(activeContract.taxa || 0);
-
-    paymentMutation.mutate({
-      tipo: "MISTO",
-      valorPago: valorQuitacao,
-      observacao: "Quitação Total"
-    });
-  };
-
-  const handleQuitCustom = () => {
-    if (!activeContract) return;
-    const customTax = Number(customTaxValue || 0);
-    const valorQuitacao = Number(activeContract.valorEmAberto || 0) + customTax;
-
-    paymentMutation.mutate({
-      // ✅ Ajuste fixado: Se for mensal modificado, envia PERSONALIZADO para acionar o back-end
-      tipo: isParcelado ? "MISTO" : "PERSONALIZADO",
-      valorPago: valorQuitacao,
-      valorDestinadoTaxa: customTax,
-      observacao: `Quitação Total com Taxa ajustada para ${formatCurrency(customTax)}`
-    });
-  };
-
-  const handleZeroTax = () => {
-    setCustomTaxValue("0");
-    if (!isCustomPayment) setIsCustomPayment(true);
-    toast.info("Taxa zerada para este pagamento.");
-  };
-
-  const formatCurrency = (v: number) =>
-    new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(v);
+  // Cálculo automático do Total Geral Pago (valorPago)
+  const totalGeralPago = useMemo(() => {
+    const p = Number(valPrincipal) || 0;
+    const j = Number(valJuros) || 0;
+    const t = Number(valTaxa) || 0;
+    return p + j + t;
+  }, [valPrincipal, valJuros, valTaxa]);
 
   if (!activeContract) return null;
+
+  // Envio dos dados estruturados exatamente como a API espera
+  const handleConfirmAmortize = () => {
+    if (totalGeralPago <= 0) return;
+
+    // ✅ CORRIGIDO: "tipo" agora recebe "AMORTIZACAO" fixo seguindo as regras de tipos de pagamentos
+    const payload = {
+      tipo: "AMORTIZACAO" as const, 
+      valorPago: totalGeralPago,
+      valorDestinadoPrincipal: Number(valPrincipal) || 0,
+      valorDestinadoJuros: Number(valJuros) || 0,
+      valorDestinadoTaxa: Number(valTaxa) || 0,
+      observacao: observacao.trim() || undefined,
+    };
+
+    props.handleAmortize(payload);
+    
+    // Limpa o formulário após o envio
+    setValPrincipal("");
+    setValJuros("");
+    setValTaxa("");
+    setObservacao("");
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => (!v ? onClose() : null)}>
@@ -274,7 +121,7 @@ export default function PaymentContractModal({
             <div className="text-right">
               <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider leading-none mb-1">Em Aberto</p>
               <p className="text-lg md:text-2xl font-black text-white leading-none font-mono">
-                {formatCurrency(Number(activeContract.valorEmAberto))}
+                {props.formatCurrency(Number(activeContract.valorEmAberto))}
               </p>
             </div>
 
@@ -314,7 +161,7 @@ export default function PaymentContractModal({
                     return (
                       <div
                         key={inst.id}
-                        onClick={() => toggleInstallment(inst.id)}
+                        onClick={() => props.toggleInstallment(inst.id)}
                         className={cn(
                           "flex items-center justify-between p-3 sm:p-4 rounded-lg cursor-pointer transition-all border group",
                           isSelected ? "bg-blue-500/10 border-blue-500" : "bg-white/5 border-white/5 hover:border-white/20"
@@ -328,14 +175,14 @@ export default function PaymentContractModal({
                             </span>
                             {isOverdue && (
                               <span className="text-[10px] sm:text-xs text-red-400 flex items-center gap-1 mt-0.5">
-                                <AlertCircle className="w-3 h-3" /> Atrasada ({formatCurrency(taxaInst)} multa)
+                                <AlertCircle className="w-3 h-3" /> Atrasada ({props.formatCurrency(taxaInst)} multa)
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="text-right flex flex-col">
                           <span className={cn("font-mono font-medium text-sm sm:text-base", isSelected ? "text-blue-400" : "text-white")}>
-                            {formatCurrency(Number(inst.valor) + taxaInst)}
+                            {props.formatCurrency(Number(inst.valor) + taxaInst)}
                           </span>
                         </div>
                       </div>
@@ -357,20 +204,20 @@ export default function PaymentContractModal({
                   {!isParcelado && (
                     <div className="flex justify-between items-center text-xs sm:text-sm">
                       <span className="text-gray-400">Valor Emprestado</span>
-                      <span className="text-white font-mono">{formatCurrency(summary.valorEmprestado)}</span>
+                      <span className="text-white font-mono">{props.formatCurrency(summary.valorEmprestado)}</span>
                     </div>
                   )}
 
                   <div className="flex justify-between items-center text-xs sm:text-sm">
                     <span className="text-gray-400">{isParcelado ? "Principal Selecionado" : "Juros do Ciclo"}</span>
-                    <span className="text-white font-mono">{formatCurrency(summary.principalTotal)}</span>
+                    <span className="text-white font-mono">{props.formatCurrency(summary.principalTotal)}</span>
                   </div>
 
                   <div className="flex justify-between items-center text-xs sm:text-sm">
                     <span className="text-gray-400 font-medium">Multas/Taxas</span>
                     <div className="flex items-center gap-2">
                       <span className={cn(summary.taxaTotal > 0 ? "text-red-400" : "text-gray-400", "font-mono")}>
-                        {formatCurrency(summary.taxaTotal)}
+                        {props.formatCurrency(summary.taxaTotal)}
                       </span>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -385,7 +232,7 @@ export default function PaymentContractModal({
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel className="bg-white/5 border-white/10 text-white">Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleZeroTax} className="bg-red-600">Sim, Zerar</AlertDialogAction>
+                            <AlertDialogAction onClick={props.handleZeroTax} className="bg-red-600">Sim, Zerar</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -406,7 +253,7 @@ export default function PaymentContractModal({
                           type="number"
                           className="bg-black/40 border-blue-500/50 text-white h-8 text-sm"
                           value={customTaxValue}
-                          onChange={(e) => setCustomTaxValue(e.target.value)}
+                          onChange={(e) => props.setCustomTaxValue(e.target.value)}
                         />
                       </div>
                     </div>
@@ -415,7 +262,7 @@ export default function PaymentContractModal({
                   <Separator className="bg-white/10" />
                   <div className="flex justify-between items-end">
                     <span className="text-xs sm:text-sm font-bold text-gray-300">Total a Pagar</span>
-                    <span className="text-xl sm:text-2xl font-bold text-gold font-mono">{formatCurrency(summary.total)}</span>
+                    <span className="text-xl sm:text-2xl font-bold text-gold font-mono">{props.formatCurrency(summary.total)}</span>
                   </div>
                 </div>
               </div>
@@ -427,7 +274,7 @@ export default function PaymentContractModal({
                     <Button
                       variant="ghost"
                       className="w-full h-9 border border-white/10 text-[10px] uppercase tracking-widest bg-blue-600/20 text-blue-400"
-                      onClick={() => { setIsCustomPayment(false); setCustomTaxValue(""); }}
+                      onClick={() => { props.setIsCustomPayment(false); props.setCustomTaxValue(""); }}
                     >
                       <Settings2 className="w-3 h-3 mr-2" />
                       Cancelar Ajuste
@@ -436,10 +283,10 @@ export default function PaymentContractModal({
                     <Button
                       size="lg"
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 shadow-lg"
-                      onClick={handlePayJurosCustom}
-                      disabled={paymentMutation.isPending}
+                      onClick={props.handlePayJurosCustom}
+                      disabled={props.isPending}
                     >
-                      {paymentMutation.isPending ? <Loader2 className="animate-spin" /> : (
+                      {props.isPending ? <Loader2 className="animate-spin" /> : (
                         <div className="flex items-center justify-between w-full px-2">
                           <span className="text-sm">Pagar Juros com Nova Taxa</span>
                           <ArrowRight className="w-4 h-4 ml-2" />
@@ -450,8 +297,8 @@ export default function PaymentContractModal({
                     <Button
                       variant="outline"
                       className="w-full border-green-500/20 text-green-500 hover:bg-green-500/10 h-10 text-xs"
-                      onClick={handleQuitCustom}
-                      disabled={paymentMutation.isPending}
+                      onClick={props.handleQuitCustom}
+                      disabled={props.isPending}
                     >
                       <CheckCircle className="w-4 h-4 mr-2" /> Quitar com Nova Taxa
                     </Button>
@@ -462,7 +309,7 @@ export default function PaymentContractModal({
                       <Button
                         variant="ghost"
                         className="w-full h-9 border border-white/10 text-[10px] uppercase tracking-widest text-gray-400"
-                        onClick={() => { setIsCustomPayment(true); setCustomTaxValue(""); }}
+                        onClick={() => { props.setIsCustomPayment(true); props.setCustomTaxValue(""); }}
                       >
                         <Settings2 className="w-3 h-3 mr-2" />
                         Personalizar Taxa
@@ -478,10 +325,10 @@ export default function PaymentContractModal({
                     <Button
                       size="lg"
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 shadow-lg"
-                      onClick={handlePay}
-                      disabled={paymentMutation.isPending || (isParcelado && summary.total <= 0)}
+                      onClick={props.handlePay}
+                      disabled={props.isPending || (isParcelado && summary.total <= 0)}
                     >
-                      {paymentMutation.isPending ? <Loader2 className="animate-spin" /> : (
+                      {props.isPending ? <Loader2 className="animate-spin" /> : (
                         <div className="flex items-center justify-between w-full px-2">
                           <span className="text-sm">
                             {isParcelado ? "Pagar Seleção" : "Pagar Juros"}
@@ -491,11 +338,110 @@ export default function PaymentContractModal({
                       )}
                     </Button>
 
+                    {/* ALERTDIALOG DA AMORTIZAÇÃO COMPLETA */}
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full border-amber-500/20 text-amber-500 hover:bg-amber-500/10 h-10 text-xs"
+                          disabled={props.isPending}
+                        >
+                          <Wallet className="w-4 h-4 mr-2" /> Amortizar Saldo
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="bg-[#0f172a] border-white/10 text-white max-w-lg w-[95%] rounded-lg">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="flex items-center gap-2">
+                            <Wallet className="w-5 h-5 text-amber-500" /> Detalhar Amortização
+                          </AlertDialogTitle>
+                          <AlertDialogDescription className="text-gray-400">
+                            Informe a distribuição do valor pago pelo cliente para o abatimento do saldo.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+
+                        {/* Formulário com os campos da interface */}
+                        <div className="space-y-4 my-4">
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Principal</label>
+                              <Input
+                                type="number"
+                                placeholder="0,00"
+                                className="bg-black/40 border-white/10 text-white h-9 text-xs font-mono"
+                                value={valPrincipal}
+                                onChange={(e) => setValPrincipal(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Juros</label>
+                              <Input
+                                type="number"
+                                placeholder="0,00"
+                                className="bg-black/40 border-white/10 text-white h-9 text-xs font-mono"
+                                value={valJuros}
+                                onChange={(e) => setValJuros(e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Taxas</label>
+                              <Input
+                                type="number"
+                                placeholder="0,00"
+                                className="bg-black/40 border-white/10 text-white h-9 text-xs font-mono"
+                                value={valTaxa}
+                                onChange={(e) => setValTaxa(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Caixa de Texto da Observação */}
+                          <div>
+                            <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Observação (Opcional)</label>
+                            <Input
+                              placeholder="Motivo da amortização..."
+                              className="bg-black/40 border-white/10 text-white h-9 text-xs"
+                              value={observacao}
+                              onChange={(e) => setObservacao(e.target.value)}
+                            />
+                          </div>
+
+                          {/* Painel do Total Geral Calculado */}
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-3 flex justify-between items-center font-mono">
+                            <span className="text-xs font-medium text-amber-400">Total Geral Pago:</span>
+                            <span className="text-base font-bold text-white">
+                              {props.formatCurrency(totalGeralPago)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <AlertDialogFooter>
+                          <AlertDialogCancel 
+                            className="bg-white/5 border-white/10 text-white hover:bg-white/10 text-xs"
+                            onClick={() => {
+                              setValPrincipal("");
+                              setValJuros("");
+                              setValTaxa("");
+                              setObservacao("");
+                            }}
+                          >
+                            Cancelar
+                          </AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={handleConfirmAmortize} 
+                            className="bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                            disabled={totalGeralPago <= 0 || props.isPending} // ✅ Bloqueia cliques duplos durante a requisição
+                          >
+                            {props.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "Confirmar Amortização"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+
                     <Button
                       variant="outline"
                       className="w-full border-green-500/20 text-green-500 hover:bg-green-500/10 h-10 text-xs"
-                      onClick={handleQuit}
-                      disabled={paymentMutation.isPending}
+                      onClick={props.handleQuit}
+                      disabled={props.isPending}
                     >
                       <CheckCircle className="w-4 h-4 mr-2" /> Quitar Contrato
                     </Button>
